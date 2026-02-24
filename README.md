@@ -256,10 +256,6 @@ npm run dev
 
 `POST /webhooks/emby`
 
-请求头：
-
-- `x-emby-secret`: 与 `.env` 中 `EMBY_WEBHOOK_SECRET` 一致
-
 说明：
 
 - 在 Emby 后台把 webhook 回调地址配置为你的服务地址：`/webhooks/emby`

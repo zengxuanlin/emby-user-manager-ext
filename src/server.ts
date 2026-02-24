@@ -749,11 +749,6 @@ function parseIngestionInfo(
 }
 
 app.post("/webhooks/emby", async (req, res) => {
-  const signature = req.header("x-emby-secret");
-  if (!signature || signature !== config.embyWebhookSecret) {
-    return res.status(401).json({ message: "invalid webhook secret" });
-  }
-
   const parsed = webhookSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ message: parsed.error.flatten() });

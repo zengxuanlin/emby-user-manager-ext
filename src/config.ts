@@ -15,7 +15,6 @@ export const config = {
   adminUsername: required("ADMIN_USERNAME"),
   adminPassword: required("ADMIN_PASSWORD"),
   authSecret: required("AUTH_SECRET"),
-  embyWebhookSecret: required("EMBY_WEBHOOK_SECRET"),
   embyBaseUrl: required("EMBY_BASE_URL").replace(/\/+$/, ""),
   embyApiKey: required("EMBY_API_KEY"),
 };
