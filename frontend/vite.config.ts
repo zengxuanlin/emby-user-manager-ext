@@ -5,7 +5,8 @@ export default defineConfig({
   plugins: [vue()],
   server: {
     port: 5173,
-    host:true,
+    host: true,
+    allowedHosts: ['eu.jsky.space'],
     proxy: {
       "/api": {
         target: "http://localhost:3000",
