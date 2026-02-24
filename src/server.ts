@@ -73,6 +73,12 @@ const updateNotificationSettingsSchema = z.object({
     .union([z.string(), z.literal(""), z.null()])
     .optional()
     .transform((v) => (v === "" ? null : v)),
+  smtpHost: z
+    .union([z.string().min(1), z.literal(""), z.null()])
+    .optional()
+    .transform((v) => (v === "" ? null : v)),
+  smtpPort: z.number().int().min(1).max(65535),
+  smtpSecure: z.boolean(),
   ingestionPushEnabled: z.boolean(),
 });
 
@@ -92,6 +98,9 @@ app.put("/admin/system/notification-settings", requireAdmin, async (req: AdminRe
   const settings = await updateNotificationSettings({
     senderEmail: parsed.data.senderEmail ?? null,
     emailAuthCode: parsed.data.emailAuthCode ?? null,
+    smtpHost: parsed.data.smtpHost ?? null,
+    smtpPort: parsed.data.smtpPort,
+    smtpSecure: parsed.data.smtpSecure,
     ingestionPushEnabled: parsed.data.ingestionPushEnabled,
   });
 
@@ -103,6 +112,9 @@ app.put("/admin/system/notification-settings", requireAdmin, async (req: AdminRe
       targetId: "default",
       detailJson: JSON.stringify({
         senderEmail: settings.senderEmail,
+        smtpHost: settings.smtpHost,
+        smtpPort: settings.smtpPort,
+        smtpSecure: settings.smtpSecure,
         ingestionPushEnabled: settings.ingestionPushEnabled,
       }),
     },

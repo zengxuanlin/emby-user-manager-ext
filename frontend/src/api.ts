@@ -62,6 +62,9 @@ export interface RechargeRecordItem {
 export interface NotificationSettings {
   senderEmail: string | null;
   emailAuthCode: string | null;
+  smtpHost: string | null;
+  smtpPort: number;
+  smtpSecure: boolean;
   ingestionPushEnabled: boolean;
 }
 

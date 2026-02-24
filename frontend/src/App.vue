@@ -179,6 +179,17 @@
               show-password
               placeholder="邮箱授权码"
             />
+            <el-input v-model="notificationForm.smtpHost" placeholder="SMTP Host（如 smtp.qq.com）" />
+            <el-input-number
+              v-model="notificationForm.smtpPort"
+              :min="1"
+              :max="65535"
+              controls-position="right"
+            />
+            <div class="row">
+              <span>SMTP 使用 SSL/TLS</span>
+              <el-switch v-model="notificationForm.smtpSecure" />
+            </div>
             <div class="row">
               <span>是否开启入库推送</span>
               <el-switch v-model="notificationForm.ingestionPushEnabled" />
@@ -402,6 +413,9 @@ const passwordForm = reactive({
 const notificationForm = reactive<NotificationSettings>({
   senderEmail: "",
   emailAuthCode: "",
+  smtpHost: "",
+  smtpPort: 465,
+  smtpSecure: true,
   ingestionPushEnabled: true,
 });
 
@@ -695,6 +709,9 @@ async function loadNotificationSettings() {
     const { data } = await client().getNotificationSettings();
     notificationForm.senderEmail = data.settings.senderEmail ?? "";
     notificationForm.emailAuthCode = data.settings.emailAuthCode ?? "";
+    notificationForm.smtpHost = data.settings.smtpHost ?? "";
+    notificationForm.smtpPort = Number(data.settings.smtpPort ?? 465);
+    notificationForm.smtpSecure = Boolean(data.settings.smtpSecure);
     notificationForm.ingestionPushEnabled = Boolean(data.settings.ingestionPushEnabled);
   } catch (error: any) {
     ElMessage.error(error?.response?.data?.message || "加载通知设置失败");
@@ -707,8 +724,11 @@ async function submitNotificationSettings() {
   loading.notifySettings = true;
   try {
     const { data } = await client().updateNotificationSettings({
-      senderEmail: notificationForm.senderEmail.trim() || null,
-      emailAuthCode: notificationForm.emailAuthCode.trim() || null,
+      senderEmail: (notificationForm.senderEmail ?? "").trim() || null,
+      emailAuthCode: (notificationForm.emailAuthCode ?? "").trim() || null,
+      smtpHost: (notificationForm.smtpHost ?? "").trim() || null,
+      smtpPort: Number(notificationForm.smtpPort),
+      smtpSecure: notificationForm.smtpSecure,
       ingestionPushEnabled: notificationForm.ingestionPushEnabled,
     });
     notifyResult.value = `保存成功: 推送${data.settings.ingestionPushEnabled ? "开启" : "关闭"}`;

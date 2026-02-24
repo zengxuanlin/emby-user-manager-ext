@@ -112,6 +112,9 @@ model NotificationSetting {
   id                String   @id @default("default")
   senderEmail       String?
   emailAuthCode     String?
+  smtpHost          String?
+  smtpPort          Int      @default(465)
+  smtpSecure        Boolean  @default(true)
   ingestionPushEnabled Boolean @default(true)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt

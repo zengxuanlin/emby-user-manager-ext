@@ -7,7 +7,7 @@ Emby 会员系统 MVP（手工充值版），已包含：
 - 管理员手工充值（按月续期）
 - 到期任务（定时与手动触发）
 - Emby Webhook 入库与去重
-- 邮件通知日志（当前为数据库记录，后续可替换真实发信）
+- 邮件通知（SMTP 真实发信 + 数据库日志）
 
 ## 1) 初始化
 
@@ -29,6 +29,14 @@ npm run dev
 ```bash
 docker compose logs -f postgres
 ```
+
+SMTP 真实发信配置在管理后台“通知设置”里保存（数据库 `NotificationSetting`）：
+
+- `senderEmail`
+- `emailAuthCode`
+- `smtpHost`
+- `smtpPort`
+- `smtpSecure`
 
 前端：
 
@@ -207,6 +215,9 @@ npm run dev
 {
   "senderEmail": "sender@example.com",
   "emailAuthCode": "mail-auth-code",
+  "smtpHost": "smtp.example.com",
+  "smtpPort": 465,
+  "smtpSecure": true,
   "ingestionPushEnabled": true
 }
 ```
