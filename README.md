@@ -50,22 +50,28 @@ npm run front:dev
 
 ## Docker 一键部署（推荐）
 
-1. 直接编辑 `docker-compose.yml`，至少填写 `ADMIN_USERNAME`、`ADMIN_PASSWORD`、`AUTH_SECRET`、`EMBY_*`。
-2. 启动数据库：
+1. 推送到 `main` 后，GitHub Actions 会自动构建并推送镜像到 GHCR：
+
+- `ghcr.io/zengxuanlin/emby-user-manager-ext-api:latest`
+- `ghcr.io/zengxuanlin/emby-user-manager-ext-web:latest`
+
+2. 直接编辑 `docker-compose.yml`，至少填写 `ADMIN_USERNAME`、`ADMIN_PASSWORD`、`AUTH_SECRET`、`EMBY_*`。
+3. 启动数据库：
 
 ```bash
 docker compose up -d postgres
 ```
 
-3. 执行数据库迁移：
+4. 执行数据库迁移：
 
 ```bash
 docker compose run --rm api npx prisma migrate deploy
 ```
 
-4. 启动全部服务：
+5. 启动全部服务：
 
 ```bash
+docker compose pull
 docker compose up -d
 ```
 

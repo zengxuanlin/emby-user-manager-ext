@@ -19,9 +19,7 @@ services:
       retries: 10
 
   api:
-    build:
-      context: .
-      dockerfile: Dockerfile.api
+    image: ghcr.io/zengxuanlin/emby-user-manager-ext-api:latest
     container_name: emby-vip-api
     restart: unless-stopped
     environment:
@@ -40,9 +38,7 @@ services:
       - "3000:3000"
 
   web:
-    build:
-      context: .
-      dockerfile: Dockerfile.web
+    image: ghcr.io/zengxuanlin/emby-user-manager-ext-web:latest
     container_name: emby-vip-web
     restart: unless-stopped
     depends_on:
