@@ -763,6 +763,10 @@ function parseIngestionInfo(
 app.post("/webhooks/emby", async (req, res) => {
   const parsed = webhookSchema.safeParse(req.body);
   if (!parsed.success) {
+    console.warn("[webhook] invalid payload", {
+      contentType: req.header("content-type") ?? null,
+      bodyType: typeof req.body,
+    });
     return res.status(400).json({ message: parsed.error.flatten() });
   }
 
@@ -783,6 +787,13 @@ app.post("/webhooks/emby", async (req, res) => {
     parsed.data.eventTime ??
     pickText(rawBody, ["Date", "date", "EventTime", "eventTime"]) ??
     undefined;
+  console.info("[webhook] received", {
+    contentType: req.header("content-type") ?? null,
+    bodyKeys: Object.keys(rawBody),
+    eventType,
+    embyUserId: embyUserId ?? null,
+    eventTime: eventTime ?? null,
+  });
   const ingestion = parseIngestionInfo(eventType, rawBody);
 
   const eventKey = ingestion.isIngestionEvent && ingestion.dedupKey
@@ -819,6 +830,7 @@ app.post("/webhooks/emby", async (req, res) => {
         },
         select: { id: true, email: true },
       });
+      console.info("[webhook] webhooktest receivers", { count: receivers.length });
 
       const testTitle = pickText(rawBody, ["Title", "title"]) ?? "Test Notification";
       const testDesc = pickText(rawBody, ["Description", "description"]) ?? "";
@@ -856,6 +868,11 @@ app.post("/webhooks/emby", async (req, res) => {
           isActive: true,
         },
         select: { id: true, email: true },
+      });
+      console.info("[webhook] ingestion receivers", {
+        count: receivers.length,
+        itemTitle: ingestion.itemTitle,
+        mediaKind: ingestion.mediaKind,
       });
 
       const subject =
@@ -925,6 +942,13 @@ app.post("/webhooks/emby", async (req, res) => {
           data: { emailDispatched: true },
         });
       }
+    } else {
+      console.info("[webhook] no email branch matched", {
+        eventType,
+        hasUserId: Boolean(userId),
+        isIngestionEvent: ingestion.isIngestionEvent,
+        itemTitle: ingestion.itemTitle ?? null,
+      });
     }
   } catch (error) {
     if (String(error).includes("Unique constraint")) {
