@@ -821,7 +821,9 @@ app.post("/webhooks/emby", async (req, res) => {
     });
 
     const eventTypeLower = eventType.toLowerCase();
-    if (eventTypeLower.includes("webhooktest")) {
+    const isTestEvent =
+      eventTypeLower.includes("webhooktest") || eventTypeLower.includes("notificationtest");
+    if (isTestEvent) {
       const receivers = await prisma.appUser.findMany({
         where: {
           emailPushEnabled: true,
