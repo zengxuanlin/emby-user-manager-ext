@@ -50,7 +50,7 @@ npm run front:dev
 
 ## Docker 一键部署（推荐）
 
-1. 准备 `.env`（至少配置 `ADMIN_USERNAME`、`ADMIN_PASSWORD`、`AUTH_SECRET`、`EMBY_*`）。
+1. 直接编辑 `docker-compose.yml`，至少填写 `ADMIN_USERNAME`、`ADMIN_PASSWORD`、`AUTH_SECRET`、`EMBY_*`。
 2. 启动数据库：
 
 ```bash

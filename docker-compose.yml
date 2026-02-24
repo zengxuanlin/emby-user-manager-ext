@@ -24,11 +24,15 @@ services:
       dockerfile: Dockerfile.api
     container_name: emby-vip-api
     restart: unless-stopped
-    env_file:
-      - .env
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/emby_vip?schema=public
       PORT: 3000
+      TZ: UTC
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: change-me
+      AUTH_SECRET: change-me-please-use-a-long-random-string
+      EMBY_BASE_URL: http://127.0.0.1:8096
+      EMBY_API_KEY: replace-with-your-emby-api-key
     depends_on:
       postgres:
         condition: service_healthy
