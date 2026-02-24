@@ -95,7 +95,7 @@
             </el-table-column>
             <el-table-column label="操作" min-width="130" fixed="right">
               <template #default="{ row }">
-                <el-dropdown @command="(command) => handleUserAction(command, row)">
+                <el-dropdown @command="(command: string) => handleUserAction(command, row)">
                   <el-button type="primary" plain>
                     操作
                     <el-icon class="el-icon--right"><ArrowDown /></el-icon>
