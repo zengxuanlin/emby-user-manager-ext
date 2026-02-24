@@ -2,8 +2,12 @@ import crypto from "node:crypto";
 import type { Request, Response, NextFunction } from "express";
 import { config } from "./config.js";
 
-export interface AdminRequest extends Request {
-  adminName: string;
+declare global {
+  namespace Express {
+    interface Request {
+      adminName?: string;
+    }
+  }
 }
 
 interface TokenPayload {
@@ -76,6 +80,6 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction): v
     return;
   }
 
-  (req as AdminRequest).adminName = payload.username;
+  req.adminName = payload.username;
   next();
 }

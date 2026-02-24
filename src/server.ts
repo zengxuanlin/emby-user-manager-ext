@@ -5,7 +5,7 @@ import { z } from "zod";
 import { MembershipStatus } from "@prisma/client";
 import { config } from "./config.js";
 import { prisma } from "./db.js";
-import { createAdminSessionToken, requireAdmin, type AdminRequest } from "./auth.js";
+import { createAdminSessionToken, requireAdmin } from "./auth.js";
 import { addUtcMonths, nowUtc } from "./date.js";
 import { sendEmail } from "./email.js";
 import { getNotificationSettings, updateNotificationSettings } from "./settings.js";
@@ -22,6 +22,14 @@ import {
 const app = express();
 app.use(express.json({ limit: "1mb" }));
 app.use(morgan("dev"));
+
+function asSingle(value: string | string[]): string {
+  return Array.isArray(value) ? value[0] ?? "" : value;
+}
+
+function adminNameOf(req: express.Request): string {
+  return req.adminName ?? "unknown-admin";
+}
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true, now: new Date().toISOString() });
@@ -82,7 +90,8 @@ const updateNotificationSettingsSchema = z.object({
   ingestionPushEnabled: z.boolean(),
 });
 
-app.put("/admin/system/notification-settings", requireAdmin, async (req: AdminRequest, res) => {
+app.put("/admin/system/notification-settings", requireAdmin, async (req, res) => {
+  const adminName = adminNameOf(req);
   const parsed = updateNotificationSettingsSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({
@@ -106,7 +115,7 @@ app.put("/admin/system/notification-settings", requireAdmin, async (req: AdminRe
 
   await prisma.auditLog.create({
     data: {
-      actor: req.adminName,
+      actor: adminName,
       action: "NOTIFICATION_SETTINGS_UPDATE",
       targetType: "NotificationSetting",
       targetId: "default",
@@ -164,7 +173,8 @@ app.get("/admin/emby/users", requireAdmin, async (req, res) => {
   res.json({ users });
 });
 
-app.post("/admin/emby/sync-users", requireAdmin, async (req: AdminRequest, res) => {
+app.post("/admin/emby/sync-users", requireAdmin, async (req, res) => {
+  const adminName = adminNameOf(req);
   const embyUsers = await listEmbyUsers();
   let created = 0;
   let updated = 0;
@@ -207,7 +217,7 @@ app.post("/admin/emby/sync-users", requireAdmin, async (req: AdminRequest, res) 
 
   await prisma.auditLog.create({
     data: {
-      actor: req.adminName,
+      actor: adminName,
       action: "EMBY_USERS_SYNC",
       targetType: "AppUser",
       targetId: "batch",
@@ -244,7 +254,8 @@ const createEmbyUserSchema = z.object({
   emailPushEnabled: z.boolean().optional(),
 });
 
-app.post("/admin/emby/users/create", requireAdmin, async (req: AdminRequest, res) => {
+app.post("/admin/emby/users/create", requireAdmin, async (req, res) => {
+  const adminName = adminNameOf(req);
   const parsed = createEmbyUserSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({
@@ -285,7 +296,7 @@ app.post("/admin/emby/users/create", requireAdmin, async (req: AdminRequest, res
 
   await prisma.auditLog.create({
     data: {
-      actor: req.adminName,
+      actor: adminName,
       action: "EMBY_USER_CREATE",
       targetType: "EmbyUser",
       targetId: created.embyUserId,
@@ -309,13 +320,14 @@ app.post("/admin/emby/users/create", requireAdmin, async (req: AdminRequest, res
 });
 
 app.get("/admin/emby/users/:embyUserId/policy", requireAdmin, async (req, res) => {
-  const policy = await getEmbyUserPolicy(req.params.embyUserId);
+  const embyUserId = asSingle(req.params.embyUserId);
+  const policy = await getEmbyUserPolicy(embyUserId);
   const local = await prisma.appUser.findUnique({
-    where: { embyUserId: req.params.embyUserId },
+    where: { embyUserId },
     select: { email: true, emailPushEnabled: true },
   });
   res.json({
-    embyUserId: req.params.embyUserId,
+    embyUserId,
     policy,
     local: {
       email: local?.email ?? null,
@@ -331,25 +343,27 @@ const updatePolicySchema = z.object({
   emailPushEnabled: z.boolean().optional(),
 });
 
-app.put("/admin/emby/users/:embyUserId/policy", requireAdmin, async (req: AdminRequest, res) => {
+app.put("/admin/emby/users/:embyUserId/policy", requireAdmin, async (req, res) => {
+  const adminName = adminNameOf(req);
+  const embyUserId = asSingle(req.params.embyUserId);
   const parsed = updatePolicySchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ message: parsed.error.flatten() });
   }
 
-  await setEmbyUserPolicy(req.params.embyUserId, parsed.data.policy);
+  await setEmbyUserPolicy(embyUserId, parsed.data.policy);
 
   if (parsed.data.localEmail !== undefined || parsed.data.emailPushEnabled !== undefined) {
     const existing = await prisma.appUser.findUnique({
-      where: { embyUserId: req.params.embyUserId },
+      where: { embyUserId },
       include: { memberships: true },
     });
 
     if (!existing) {
       await prisma.appUser.create({
         data: {
-          embyUserId: req.params.embyUserId,
-          embyUsername: parsed.data.embyUsername ?? req.params.embyUserId,
+          embyUserId,
+          embyUsername: parsed.data.embyUsername ?? embyUserId,
           email: parsed.data.localEmail ?? null,
           emailPushEnabled: parsed.data.emailPushEnabled ?? false,
           memberships: { create: { status: MembershipStatus.EXPIRED } },
@@ -371,10 +385,10 @@ app.put("/admin/emby/users/:embyUserId/policy", requireAdmin, async (req: AdminR
 
   await prisma.auditLog.create({
     data: {
-      actor: req.adminName,
+      actor: adminName,
       action: "EMBY_USER_POLICY_UPDATE",
       targetType: "EmbyUser",
-      targetId: req.params.embyUserId,
+      targetId: embyUserId,
       detailJson: JSON.stringify(parsed.data.policy),
     },
   });
@@ -389,7 +403,9 @@ const updatePasswordSchema = z.object({
     .pipe(z.string().min(1, "password must be at least 1 character").max(100)),
 });
 
-app.put("/admin/emby/users/:embyUserId/password", requireAdmin, async (req: AdminRequest, res) => {
+app.put("/admin/emby/users/:embyUserId/password", requireAdmin, async (req, res) => {
+  const adminName = adminNameOf(req);
+  const embyUserId = asSingle(req.params.embyUserId);
   const parsed = updatePasswordSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({
@@ -402,14 +418,14 @@ app.put("/admin/emby/users/:embyUserId/password", requireAdmin, async (req: Admi
     });
   }
 
-  await updateEmbyUserPassword(req.params.embyUserId, parsed.data.password);
+  await updateEmbyUserPassword(embyUserId, parsed.data.password);
 
   await prisma.auditLog.create({
     data: {
-      actor: req.adminName,
+      actor: adminName,
       action: "EMBY_USER_PASSWORD_UPDATE",
       targetType: "EmbyUser",
-      targetId: req.params.embyUserId,
+      targetId: embyUserId,
       detailJson: JSON.stringify({ updated: true }),
     },
   });
@@ -423,7 +439,8 @@ const upsertUserSchema = z.object({
   email: z.string().email().optional(),
 });
 
-app.post("/admin/users/upsert", requireAdmin, async (req: AdminRequest, res) => {
+app.post("/admin/users/upsert", requireAdmin, async (req, res) => {
+  const adminName = adminNameOf(req);
   const parsed = upsertUserSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ message: parsed.error.flatten() });
@@ -447,7 +464,7 @@ app.post("/admin/users/upsert", requireAdmin, async (req: AdminRequest, res) => 
 
   await prisma.auditLog.create({
     data: {
-      actor: req.adminName,
+      actor: adminName,
       action: "USER_UPSERT",
       targetType: "AppUser",
       targetId: user.id,
@@ -484,7 +501,8 @@ const rechargeSchema = z.object({
   note: z.string().max(500).optional(),
 });
 
-app.post("/admin/recharges/manual", requireAdmin, async (req: AdminRequest, res) => {
+app.post("/admin/recharges/manual", requireAdmin, async (req, res) => {
+  const adminName = adminNameOf(req);
   const parsed = rechargeSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ message: parsed.error.flatten() });
@@ -528,7 +546,7 @@ app.post("/admin/recharges/manual", requireAdmin, async (req: AdminRequest, res)
     const recharge = await tx.rechargeRecord.create({
       data: {
         userId: user.id,
-        adminName: req.adminName,
+        adminName,
         amount: parsed.data.amount,
         months: parsed.data.months,
         startFrom,
@@ -540,7 +558,7 @@ app.post("/admin/recharges/manual", requireAdmin, async (req: AdminRequest, res)
 
     await tx.auditLog.create({
       data: {
-        actor: req.adminName,
+        actor: adminName,
         action: "MANUAL_RECHARGE",
         targetType: "AppUser",
         targetId: user.id,
@@ -612,8 +630,9 @@ app.get("/admin/recharges", requireAdmin, async (req, res) => {
 });
 
 app.get("/admin/memberships/:embyUserId", requireAdmin, async (req, res) => {
+  const embyUserId = asSingle(req.params.embyUserId);
   const user = await prisma.appUser.findUnique({
-    where: { embyUserId: req.params.embyUserId },
+    where: { embyUserId },
     include: {
       memberships: true,
       recharges: { orderBy: { createdAt: "desc" }, take: 20 },
