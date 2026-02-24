@@ -755,19 +755,33 @@ app.post("/webhooks/emby", async (req, res) => {
   }
 
   const rawBody = req.body as Record<string, unknown>;
+  const userObj = asObj(rawBody.User) ?? asObj(rawBody.user);
+  const embyUserId =
+    parsed.data.embyUserId ??
+    pickText(rawBody, ["embyUserId", "EmbyUserId", "UserId", "userId"]) ??
+    (userObj ? pickText(userObj, ["Id", "id", "UserId", "userId"]) : null) ??
+    undefined;
   const eventType =
-    parsed.data.eventType ?? parsed.data.event ?? parsed.data.NotificationType ?? "UNKNOWN";
+    parsed.data.eventType ??
+    parsed.data.event ??
+    parsed.data.NotificationType ??
+    pickText(rawBody, ["Event", "event", "NotificationType", "eventType"]) ??
+    "UNKNOWN";
+  const eventTime =
+    parsed.data.eventTime ??
+    pickText(rawBody, ["Date", "date", "EventTime", "eventTime"]) ??
+    undefined;
   const ingestion = parseIngestionInfo(eventType, rawBody);
 
   const eventKey = ingestion.isIngestionEvent && ingestion.dedupKey
     ? `INGEST:${ingestion.dedupKey}`
     : (parsed.data.eventId ??
-      `${eventType}:${parsed.data.embyUserId ?? "unknown"}:${parsed.data.eventTime ?? ""}`);
+      `${eventType}:${embyUserId ?? "unknown"}:${eventTime ?? ""}`);
 
   let userId: string | undefined;
-  if (parsed.data.embyUserId) {
+  if (embyUserId) {
     const user = await prisma.appUser.findUnique({
-      where: { embyUserId: parsed.data.embyUserId },
+      where: { embyUserId },
     });
     userId = user?.id;
   }
@@ -778,12 +792,51 @@ app.post("/webhooks/emby", async (req, res) => {
         eventType,
         eventKey,
         userId,
-        embyEventTime: parsed.data.eventTime ? new Date(parsed.data.eventTime) : null,
+        embyEventTime: eventTime ? new Date(eventTime) : null,
         payloadJson: JSON.stringify(rawBody),
       },
     });
 
-    if (ingestion.isIngestionEvent && ingestion.itemTitle) {
+    const eventTypeLower = eventType.toLowerCase();
+    if (eventTypeLower.includes("webhooktest")) {
+      const receivers = await prisma.appUser.findMany({
+        where: {
+          emailPushEnabled: true,
+          email: { not: null },
+          isActive: true,
+        },
+        select: { id: true, email: true },
+      });
+
+      const testTitle = pickText(rawBody, ["Title", "title"]) ?? "Test Notification";
+      const testDesc = pickText(rawBody, ["Description", "description"]) ?? "";
+      const testDate = pickText(rawBody, ["Date", "date"]) ?? eventTime ?? "-";
+      const bodyLines = [
+        "收到 Emby Webhook 测试通知。",
+        `事件: ${eventType}`,
+        `标题: ${testTitle}`,
+        `描述: ${testDesc || "-"}`,
+        `时间: ${testDate}`,
+      ];
+
+      for (const receiver of receivers) {
+        if (!receiver.email) {
+          continue;
+        }
+        await sendEmail({
+          userId: receiver.id,
+          to: receiver.email,
+          subject: "Emby Webhook 测试通知",
+          body: bodyLines.join("\n"),
+          eventType: `WEBHOOK_${eventType}`,
+        });
+      }
+
+      await prisma.webhookEvent.update({
+        where: { id: event.id },
+        data: { emailDispatched: receivers.length > 0 },
+      });
+    } else if (ingestion.isIngestionEvent && ingestion.itemTitle) {
       const receivers = await prisma.appUser.findMany({
         where: {
           emailPushEnabled: true,
@@ -807,7 +860,7 @@ app.post("/webhooks/emby", async (req, res) => {
               `年份: ${ingestion.year ?? "-"}`,
               `媒体库: ${ingestion.libraryName ?? "-"}`,
               `资源ID: ${ingestion.itemId ?? "-"}`,
-              `时间: ${ingestion.addedAt ?? parsed.data.eventTime ?? "-"}`,
+              `时间: ${ingestion.addedAt ?? eventTime ?? "-"}`,
             ]
           : ingestion.mediaKind === "series"
             ? [
@@ -817,7 +870,7 @@ app.post("/webhooks/emby", async (req, res) => {
                 `类型: ${ingestion.itemType ?? "-"}`,
                 `媒体库: ${ingestion.libraryName ?? "-"}`,
                 `剧集ID: ${ingestion.seriesId ?? "-"}`,
-                `时间: ${ingestion.addedAt ?? parsed.data.eventTime ?? "-"}`,
+                `时间: ${ingestion.addedAt ?? eventTime ?? "-"}`,
                 "说明: 同一剧集只会发送一次入库通知。",
               ]
             : [
@@ -825,7 +878,7 @@ app.post("/webhooks/emby", async (req, res) => {
                 `片名: ${ingestion.itemTitle}`,
                 `类型: ${ingestion.itemType ?? "-"}`,
                 `媒体库: ${ingestion.libraryName ?? "-"}`,
-                `时间: ${ingestion.addedAt ?? parsed.data.eventTime ?? "-"}`,
+                `时间: ${ingestion.addedAt ?? eventTime ?? "-"}`,
               ];
 
       for (const receiver of receivers) {
