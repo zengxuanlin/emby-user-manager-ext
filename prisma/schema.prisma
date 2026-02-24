@@ -1,0 +1,118 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MembershipStatus {
+  ACTIVE
+  EXPIRED
+}
+
+enum RechargeAction {
+  EXTEND
+  OVERRIDE
+}
+
+model AppUser {
+  id              String            @id @default(cuid())
+  embyUserId      String            @unique
+  embyUsername    String
+  email           String?           @unique
+  emailPushEnabled Boolean          @default(false)
+  isEmailVerified Boolean           @default(false)
+  isActive        Boolean           @default(true)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  memberships     Membership[]
+  recharges       RechargeRecord[]
+  webhookEvents   WebhookEvent[]
+  emailLogs       EmailNotification[]
+
+  @@index([embyUsername])
+}
+
+model Membership {
+  id                 String           @id @default(cuid())
+  userId             String           @unique
+  status             MembershipStatus @default(EXPIRED)
+  startAt            DateTime?
+  endAt              DateTime?
+  lastRechargeAmount Decimal?         @db.Decimal(10, 2)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  user               AppUser          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+}
+
+model RechargeRecord {
+  id             String         @id @default(cuid())
+  userId         String
+  adminName      String
+  action         RechargeAction @default(EXTEND)
+  amount         Decimal        @db.Decimal(10, 2)
+  months         Int
+  startFrom      DateTime
+  oldEndAt       DateTime?
+  newEndAt       DateTime
+  note           String?
+  createdAt      DateTime       @default(now())
+  user           AppUser        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model WebhookEvent {
+  id              String   @id @default(cuid())
+  userId          String?
+  eventType       String
+  eventKey        String   @unique
+  payloadJson     String
+  embyEventTime   DateTime?
+  emailDispatched Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  user            AppUser? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([eventType, createdAt])
+}
+
+model EmailNotification {
+  id          String   @id @default(cuid())
+  userId      String?
+  eventType   String
+  recipient   String
+  subject     String
+  body        String
+  status      String
+  failReason  String?
+  createdAt   DateTime @default(now())
+  dispatchedAt DateTime?
+  user        AppUser? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actor      String
+  action     String
+  targetType String
+  targetId   String
+  detailJson String
+  createdAt  DateTime @default(now())
+
+  @@index([targetType, targetId, createdAt])
+}
+
+model NotificationSetting {
+  id                String   @id @default("default")
+  senderEmail       String?
+  emailAuthCode     String?
+  ingestionPushEnabled Boolean @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}

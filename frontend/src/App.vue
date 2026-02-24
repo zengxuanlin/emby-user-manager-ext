@@ -1,0 +1,755 @@
+<template>
+  <div class="page">
+    <template v-if="!isAuthenticated">
+      <section class="card" style="max-width: 460px; margin: 8vh auto 0;">
+        <p class="kicker">EMBY VIP CONSOLE</p>
+        <h2 style="margin: 0 0 8px;">管理员登录</h2>
+        <p class="subtitle">账号密码来自后端环境变量配置</p>
+        <el-form label-position="top" class="top-gap">
+          <el-form-item label="账号">
+            <el-input v-model="loginForm.username" placeholder="请输入账号" />
+          </el-form-item>
+          <el-form-item label="密码">
+            <el-input v-model="loginForm.password" type="password" show-password placeholder="请输入密码" />
+          </el-form-item>
+        </el-form>
+        <el-button type="primary" :loading="loading.login" @click="submitLogin">登录</el-button>
+      </section>
+    </template>
+    <template v-else>
+    <header class="hero">
+      <div>
+        <p class="kicker">EMBY VIP CONSOLE</p>
+        <h1>会员管理后台</h1>
+        <p class="subtitle">手工充值、会员查询、到期任务与操作联调面板</p>
+      </div>
+      <el-button plain @click="logout">退出登录</el-button>
+    </header>
+
+    <section class="card">
+      <el-tabs v-model="tab">
+        <el-tab-pane label="用户管理" name="users">
+          <el-alert
+            title="支持直接新增 Emby 用户；已有用户会从 Emby 拉取，不需要手动输入 Emby User ID。"
+            type="info"
+            show-icon
+            :closable="false"
+          />
+
+          <div class="row top-gap">
+            <el-input v-model="search" placeholder="搜索 Emby 用户ID/用户名" @keyup.enter="fetchUsers" />
+            <el-button type="primary" @click="createDialogVisible = true">新增 Emby 用户</el-button>
+            <el-button @click="fetchUsers" :loading="loading.users">查询</el-button>
+            <el-button type="primary" plain @click="syncUsersFromEmby" :loading="loading.syncUsers">
+              同步 Emby 用户到本地
+            </el-button>
+            <span>{{ syncResult }}</span>
+          </div>
+
+          <el-table :data="users" stripe class="top-gap">
+            <el-table-column prop="embyUserId" label="Emby ID" min-width="120" />
+            <el-table-column prop="embyUsername" label="用户名" min-width="120" />
+            <el-table-column label="创建时间" min-width="200">
+              <template #default="{ row }">
+                {{ formatToChinaTime(row.embyCreatedAt) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="Emby状态" min-width="120">
+              <template #default="{ row }">
+                <el-tag :type="row.embyDisabled ? 'danger' : 'success'">
+                  {{ row.embyDisabled ? "DISABLED" : "ENABLED" }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="本地关联" min-width="120">
+              <template #default="{ row }">
+                <el-tag :type="row.localLinked ? 'success' : 'warning'">
+                  {{ row.localLinked ? "已关联" : "未关联" }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="email" label="邮箱" min-width="180" />
+            <el-table-column label="邮箱推送" min-width="120">
+              <template #default="{ row }">
+                <el-tag :type="row.emailPushEnabled ? 'success' : 'info'">
+                  {{ row.emailPushEnabled ? "开启" : "关闭" }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="状态" min-width="120">
+              <template #default="{ row }">
+                <el-tag :type="row.membershipStatus === 'ACTIVE' ? 'success' : 'info'">
+                  {{ row.membershipStatus || "N/A" }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="到期时间" min-width="220">
+              <template #default="{ row }">
+                {{ formatToChinaTime(row.membershipEndAt) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="最近充值金额" min-width="130">
+              <template #default="{ row }">
+                {{ row.lastRechargeAmount ?? "-" }}
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" min-width="130" fixed="right">
+              <template #default="{ row }">
+                <el-dropdown @command="(command) => handleUserAction(command, row)">
+                  <el-button type="primary" plain>
+                    操作
+                    <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                  </el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="policy">编辑权限</el-dropdown-item>
+                      <el-dropdown-item command="password">修改密码</el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+
+        <el-tab-pane label="手工充值" name="recharge">
+          <div class="grid cols-4">
+            <el-input v-model="rechargeForm.embyUserId" placeholder="Emby User ID" />
+            <el-input-number v-model="rechargeForm.amount" :min="0.01" :precision="2" controls-position="right" />
+            <el-input-number v-model="rechargeForm.months" :min="1" :max="36" controls-position="right" />
+            <el-input v-model="rechargeForm.note" placeholder="备注（可选）" />
+          </div>
+          <el-button type="warning" class="top-gap" @click="submitRecharge" :loading="loading.recharge">
+            提交充值
+          </el-button>
+          <pre class="result">{{ rechargeResult }}</pre>
+        </el-tab-pane>
+
+        <el-tab-pane label="充值记录" name="recharge-records">
+          <div class="row">
+            <el-input
+              v-model="rechargeRecordQuery"
+              placeholder="搜索 Emby 用户ID/用户名/管理员"
+              @keyup.enter="fetchRechargeRecords"
+            />
+            <el-button @click="fetchRechargeRecords" :loading="loading.rechargeList">查询记录</el-button>
+          </div>
+          <el-table :data="rechargeRecords" stripe class="top-gap">
+            <el-table-column prop="createdAt" label="充值时间" min-width="180">
+              <template #default="{ row }">
+                {{ formatToChinaTime(row.createdAt) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="用户" min-width="200">
+              <template #default="{ row }">
+                {{ row.user.embyUsername }} ({{ row.user.embyUserId }})
+              </template>
+            </el-table-column>
+            <el-table-column prop="adminName" label="操作管理员" min-width="120" />
+            <el-table-column prop="amount" label="充值金额" min-width="100" />
+            <el-table-column prop="months" label="月数" min-width="80" />
+            <el-table-column label="原到期" min-width="180">
+              <template #default="{ row }">
+                {{ formatToChinaTime(row.oldEndAt) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="新到期" min-width="180">
+              <template #default="{ row }">
+                {{ formatToChinaTime(row.newEndAt) }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="note" label="备注" min-width="180" />
+          </el-table>
+        </el-tab-pane>
+
+        <el-tab-pane label="会员查询" name="membership">
+          <div class="row">
+            <el-input v-model="membershipQueryId" placeholder="输入 Emby User ID" />
+            <el-button type="primary" @click="fetchMembership" :loading="loading.membership">查询详情</el-button>
+          </div>
+          <pre class="result">{{ membershipResult }}</pre>
+        </el-tab-pane>
+
+        <el-tab-pane label="通知设置" name="notification">
+          <div class="grid cols-2">
+            <el-input v-model="notificationForm.senderEmail" placeholder="发送人邮箱地址" />
+            <el-input
+              v-model="notificationForm.emailAuthCode"
+              type="password"
+              show-password
+              placeholder="邮箱授权码"
+            />
+            <div class="row">
+              <span>是否开启入库推送</span>
+              <el-switch v-model="notificationForm.ingestionPushEnabled" />
+            </div>
+          </div>
+          <div class="row top-gap">
+            <el-button type="primary" @click="submitNotificationSettings" :loading="loading.notifySettings">
+              保存通知设置
+            </el-button>
+            <span>{{ notifyResult }}</span>
+          </div>
+        </el-tab-pane>
+
+        <el-tab-pane label="任务与系统" name="jobs">
+          <div class="row">
+            <el-button type="danger" @click="runExpireJob" :loading="loading.job">执行到期任务</el-button>
+            <span>{{ jobResult }}</span>
+          </div>
+        </el-tab-pane>
+      </el-tabs>
+    </section>
+
+    <el-dialog
+      v-model="policyDialogVisible"
+      width="680px"
+      :title="`编辑权限 - ${policyEditingUser?.embyUsername || ''}`"
+      destroy-on-close
+    >
+      <div v-loading="loading.policyLoad">
+        <el-form label-position="top" class="policy-grid">
+          <el-form-item label="本地邮箱" class="span-2">
+            <el-input v-model="localProfile.email" placeholder="用于邮件通知" />
+          </el-form-item>
+          <el-form-item label="入库推送邮箱开启">
+            <el-switch v-model="localProfile.emailPushEnabled" />
+          </el-form-item>
+          <el-form-item label="管理员">
+            <el-switch v-model="policyForm.IsAdministrator" />
+          </el-form-item>
+          <el-form-item label="禁用用户">
+            <el-switch v-model="policyForm.IsDisabled" />
+          </el-form-item>
+          <el-form-item label="隐藏用户">
+            <el-switch v-model="policyForm.IsHidden" />
+          </el-form-item>
+          <el-form-item label="远程隐藏">
+            <el-switch v-model="policyForm.IsHiddenRemotely" />
+          </el-form-item>
+          <el-form-item label="允许远程访问">
+            <el-switch v-model="policyForm.EnableRemoteAccess" />
+          </el-form-item>
+          <el-form-item label="允许直播电视">
+            <el-switch v-model="policyForm.EnableLiveTvAccess" />
+          </el-form-item>
+          <el-form-item label="允许媒体播放">
+            <el-switch v-model="policyForm.EnableMediaPlayback" />
+          </el-form-item>
+          <el-form-item label="允许音频转码">
+            <el-switch v-model="policyForm.EnableAudioPlaybackTranscoding" />
+          </el-form-item>
+          <el-form-item label="允许视频转码">
+            <el-switch v-model="policyForm.EnableVideoPlaybackTranscoding" />
+          </el-form-item>
+          <el-form-item label="允许删除媒体">
+            <el-switch v-model="policyForm.EnableContentDeletion" />
+          </el-form-item>
+          <el-form-item label="允许下载媒体">
+            <el-switch v-model="policyForm.EnableContentDownloading" />
+          </el-form-item>
+        </el-form>
+      </div>
+      <template #footer>
+        <el-button @click="policyDialogVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          @click="submitPolicyUpdate"
+          :loading="loading.policySave"
+          :disabled="loading.policyLoad"
+        >
+          保存权限
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="createDialogVisible" width="560px" title="新增 Emby 用户" destroy-on-close>
+      <el-form label-position="top">
+        <el-form-item label="用户名">
+          <el-input v-model="createForm.username" placeholder="必填，例如 test_user" />
+        </el-form-item>
+        <el-form-item label="初始密码（可选）">
+          <el-input
+            v-model="createForm.password"
+            placeholder="可选，不填则稍后在 Emby 设置"
+            type="password"
+            show-password
+          />
+        </el-form-item>
+        <el-form-item label="本地邮箱（可选）">
+          <el-input v-model="createForm.localEmail" placeholder="用于邮件推送" />
+        </el-form-item>
+        <el-form-item label="入库推送邮箱开启">
+          <el-switch v-model="createForm.emailPushEnabled" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="createDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="loading.createUser" @click="submitCreateUser">
+          创建用户
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="passwordDialogVisible"
+      width="460px"
+      :title="`修改密码 - ${passwordEditingUser?.embyUsername || ''}`"
+      destroy-on-close
+    >
+      <el-form label-position="top">
+        <el-form-item label="新密码">
+          <el-input v-model="passwordForm.password" type="password" show-password placeholder="请输入新密码" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="passwordDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="loading.passwordSave" @click="submitPasswordUpdate">
+          保存密码
+        </el-button>
+      </template>
+    </el-dialog>
+    </template>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { computed, reactive, ref } from "vue";
+import { ElMessage } from "element-plus";
+import { ArrowDown } from "@element-plus/icons-vue";
+import {
+  createAdminClient,
+  login,
+  type EmbyUserPolicy,
+  type NotificationSettings,
+  type RechargeRecordItem,
+  type UserListItem,
+} from "./api";
+
+const authToken = ref(localStorage.getItem("emby_auth_token") || "");
+const isAuthenticated = computed(() => Boolean(authToken.value));
+const loginForm = reactive({
+  username: "",
+  password: "",
+});
+
+const tab = ref("users");
+const search = ref("");
+const users = ref<UserListItem[]>([]);
+const membershipQueryId = ref("");
+const membershipResult = ref("尚未查询");
+const rechargeResult = ref("尚未提交");
+const jobResult = ref("尚未执行");
+const syncResult = ref("尚未同步");
+const notifyResult = ref("尚未保存");
+const rechargeRecords = ref<RechargeRecordItem[]>([]);
+const rechargeRecordQuery = ref("");
+const createDialogVisible = ref(false);
+const passwordDialogVisible = ref(false);
+const policyDialogVisible = ref(false);
+const passwordEditingUser = ref<UserListItem | null>(null);
+const policyEditingUser = ref<UserListItem | null>(null);
+const originalPolicy = ref<EmbyUserPolicy>({});
+const localProfile = reactive({
+  email: "",
+  emailPushEnabled: false,
+});
+const policyForm = reactive<Required<Pick<
+  EmbyUserPolicy,
+  | "IsAdministrator"
+  | "IsHidden"
+  | "IsDisabled"
+  | "IsHiddenRemotely"
+  | "EnableRemoteAccess"
+  | "EnableLiveTvAccess"
+  | "EnableMediaPlayback"
+  | "EnableAudioPlaybackTranscoding"
+  | "EnableVideoPlaybackTranscoding"
+  | "EnableContentDeletion"
+  | "EnableContentDownloading"
+>>>({
+  IsAdministrator: false,
+  IsHidden: false,
+  IsDisabled: false,
+  IsHiddenRemotely: false,
+  EnableRemoteAccess: true,
+  EnableLiveTvAccess: true,
+  EnableMediaPlayback: true,
+  EnableAudioPlaybackTranscoding: true,
+  EnableVideoPlaybackTranscoding: true,
+  EnableContentDeletion: false,
+  EnableContentDownloading: true,
+});
+
+const rechargeForm = reactive({
+  embyUserId: "",
+  amount: 30,
+  months: 1,
+  note: "",
+});
+
+const createForm = reactive({
+  username: "",
+  password: "",
+  localEmail: "",
+  emailPushEnabled: false,
+});
+
+const passwordForm = reactive({
+  password: "",
+});
+
+const notificationForm = reactive<NotificationSettings>({
+  senderEmail: "",
+  emailAuthCode: "",
+  ingestionPushEnabled: true,
+});
+
+const loading = reactive({
+  login: false,
+  users: false,
+  recharge: false,
+  rechargeList: false,
+  membership: false,
+  job: false,
+  syncUsers: false,
+  createUser: false,
+  passwordSave: false,
+  notifySettings: false,
+  policyLoad: false,
+  policySave: false,
+});
+
+function client() {
+  return createAdminClient({
+    baseUrl: "/api",
+    authToken: authToken.value,
+  });
+}
+
+function formatToChinaTime(value?: string | null): string {
+  if (!value) {
+    return "-";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+  return new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(date);
+}
+
+async function fetchUsers() {
+  loading.users = true;
+  try {
+    const { data } = await client().listUsers(search.value);
+    users.value = data.users;
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.message || "查询用户失败");
+  } finally {
+    loading.users = false;
+  }
+}
+
+async function submitLogin() {
+  if (!loginForm.username.trim() || !loginForm.password.trim()) {
+    ElMessage.warning("请输入账号和密码");
+    return;
+  }
+  loading.login = true;
+  try {
+    const { data } = await login("/api", {
+      username: loginForm.username.trim(),
+      password: loginForm.password,
+    });
+    authToken.value = data.token;
+    localStorage.setItem("emby_auth_token", data.token);
+    loginForm.password = "";
+    ElMessage.success("登录成功");
+    await Promise.all([fetchUsers(), loadNotificationSettings(), fetchRechargeRecords()]);
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.message || "登录失败");
+  } finally {
+    loading.login = false;
+  }
+}
+
+function logout() {
+  authToken.value = "";
+  localStorage.removeItem("emby_auth_token");
+  ElMessage.success("已退出登录");
+}
+
+async function submitRecharge() {
+  loading.recharge = true;
+  try {
+    const { data } = await client().manualRecharge({
+      embyUserId: rechargeForm.embyUserId.trim(),
+      amount: rechargeForm.amount,
+      months: rechargeForm.months,
+      note: rechargeForm.note.trim() || undefined,
+    });
+    rechargeResult.value = JSON.stringify(data, null, 2);
+    ElMessage.success("充值成功");
+    await fetchRechargeRecords();
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.message || "充值失败");
+  } finally {
+    loading.recharge = false;
+  }
+}
+
+async function fetchRechargeRecords() {
+  loading.rechargeList = true;
+  try {
+    const { data } = await client().listRecharges(rechargeRecordQuery.value.trim(), 200);
+    rechargeRecords.value = data.records;
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.message || "查询充值记录失败");
+  } finally {
+    loading.rechargeList = false;
+  }
+}
+
+async function fetchMembership() {
+  loading.membership = true;
+  try {
+    const { data } = await client().getMembership(membershipQueryId.value.trim());
+    membershipResult.value = JSON.stringify(data, null, 2);
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.message || "查询失败");
+  } finally {
+    loading.membership = false;
+  }
+}
+
+async function runExpireJob() {
+  loading.job = true;
+  try {
+    const { data } = await client().runExpireJob();
+    jobResult.value = JSON.stringify(data);
+    ElMessage.success("任务已执行");
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.message || "任务执行失败");
+  } finally {
+    loading.job = false;
+  }
+}
+
+async function syncUsersFromEmby() {
+  loading.syncUsers = true;
+  try {
+    const { data } = await client().syncEmbyUsers();
+    syncResult.value = `同步完成: total=${data.total}, created=${data.created}, updated=${data.updated}`;
+    ElMessage.success("用户同步成功");
+    await fetchUsers();
+  } catch (error: any) {
+    syncResult.value = `同步失败: ${error?.response?.data?.message || error?.message || "未知错误"}`;
+    ElMessage.error("用户同步失败");
+  } finally {
+    loading.syncUsers = false;
+  }
+}
+
+async function submitCreateUser() {
+  if (!createForm.username.trim()) {
+    ElMessage.warning("请先输入用户名");
+    return;
+  }
+  loading.createUser = true;
+  try {
+    await client().createEmbyUser({
+      username: createForm.username.trim(),
+      password: createForm.password.trim() || undefined,
+      localEmail: createForm.localEmail.trim() || null,
+      emailPushEnabled: createForm.emailPushEnabled,
+    });
+    ElMessage.success("Emby 用户创建成功");
+    createDialogVisible.value = false;
+    createForm.username = "";
+    createForm.password = "";
+    createForm.localEmail = "";
+    createForm.emailPushEnabled = false;
+    await fetchUsers();
+  } catch (error: any) {
+    const issues = error?.response?.data?.issues;
+    if (Array.isArray(issues) && issues.length > 0) {
+      ElMessage.error(`${issues[0].path || "payload"}: ${issues[0].message}`);
+    } else {
+      ElMessage.error(error?.response?.data?.message || "创建用户失败");
+    }
+  } finally {
+    loading.createUser = false;
+  }
+}
+
+function openPasswordDialog(row: UserListItem) {
+  passwordEditingUser.value = row;
+  passwordForm.password = "";
+  passwordDialogVisible.value = true;
+}
+
+function handleUserAction(command: string, row: UserListItem) {
+  if (command === "policy") {
+    openPolicyDialog(row);
+    return;
+  }
+  if (command === "password") {
+    openPasswordDialog(row);
+  }
+}
+
+async function submitPasswordUpdate() {
+  if (!passwordEditingUser.value) {
+    return;
+  }
+  const nextPassword = passwordForm.password.trim();
+  if (!nextPassword) {
+    ElMessage.warning("请输入新密码");
+    return;
+  }
+
+  loading.passwordSave = true;
+  try {
+    await client().updateUserPassword(passwordEditingUser.value.embyUserId, nextPassword);
+    ElMessage.success("密码修改成功");
+    passwordDialogVisible.value = false;
+    passwordForm.password = "";
+  } catch (error: any) {
+    const issues = error?.response?.data?.issues;
+    if (Array.isArray(issues) && issues.length > 0) {
+      ElMessage.error(`${issues[0].path || "payload"}: ${issues[0].message}`);
+    } else {
+      ElMessage.error(error?.response?.data?.message || "密码修改失败");
+    }
+  } finally {
+    loading.passwordSave = false;
+  }
+}
+
+async function openPolicyDialog(row: UserListItem) {
+  policyEditingUser.value = row;
+  policyDialogVisible.value = true;
+  loading.policyLoad = true;
+  try {
+    const { data } = await client().getUserPolicy(row.embyUserId);
+    originalPolicy.value = data.policy ?? {};
+    localProfile.email = data.local.email ?? "";
+    localProfile.emailPushEnabled = Boolean(data.local.emailPushEnabled);
+    policyForm.IsAdministrator = Boolean(data.policy.IsAdministrator);
+    policyForm.IsHidden = Boolean(data.policy.IsHidden);
+    policyForm.IsDisabled = Boolean(data.policy.IsDisabled);
+    policyForm.IsHiddenRemotely = Boolean(data.policy.IsHiddenRemotely);
+    policyForm.EnableRemoteAccess = Boolean(data.policy.EnableRemoteAccess);
+    policyForm.EnableLiveTvAccess = Boolean(data.policy.EnableLiveTvAccess);
+    policyForm.EnableMediaPlayback = Boolean(data.policy.EnableMediaPlayback);
+    policyForm.EnableAudioPlaybackTranscoding = Boolean(data.policy.EnableAudioPlaybackTranscoding);
+    policyForm.EnableVideoPlaybackTranscoding = Boolean(data.policy.EnableVideoPlaybackTranscoding);
+    policyForm.EnableContentDeletion = Boolean(data.policy.EnableContentDeletion);
+    policyForm.EnableContentDownloading = Boolean(data.policy.EnableContentDownloading);
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.message || "加载权限失败");
+    policyDialogVisible.value = false;
+  } finally {
+    loading.policyLoad = false;
+  }
+}
+
+async function submitPolicyUpdate() {
+  if (!policyEditingUser.value) {
+    return;
+  }
+  loading.policySave = true;
+  try {
+    const merged: EmbyUserPolicy = {
+      ...originalPolicy.value,
+      ...policyForm,
+    };
+    await client().updateUserPolicy(policyEditingUser.value.embyUserId, {
+      policy: merged,
+      embyUsername: policyEditingUser.value.embyUsername,
+      localEmail: localProfile.email.trim() ? localProfile.email.trim() : null,
+      emailPushEnabled: localProfile.emailPushEnabled,
+    });
+    ElMessage.success("权限已更新");
+    policyDialogVisible.value = false;
+    await fetchUsers();
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.message || "保存权限失败");
+  } finally {
+    loading.policySave = false;
+  }
+}
+
+async function loadNotificationSettings() {
+  loading.notifySettings = true;
+  try {
+    const { data } = await client().getNotificationSettings();
+    notificationForm.senderEmail = data.settings.senderEmail ?? "";
+    notificationForm.emailAuthCode = data.settings.emailAuthCode ?? "";
+    notificationForm.ingestionPushEnabled = Boolean(data.settings.ingestionPushEnabled);
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.message || "加载通知设置失败");
+  } finally {
+    loading.notifySettings = false;
+  }
+}
+
+async function submitNotificationSettings() {
+  loading.notifySettings = true;
+  try {
+    const { data } = await client().updateNotificationSettings({
+      senderEmail: notificationForm.senderEmail.trim() || null,
+      emailAuthCode: notificationForm.emailAuthCode.trim() || null,
+      ingestionPushEnabled: notificationForm.ingestionPushEnabled,
+    });
+    notifyResult.value = `保存成功: 推送${data.settings.ingestionPushEnabled ? "开启" : "关闭"}`;
+    ElMessage.success("通知设置已保存");
+  } catch (error: any) {
+    const issues = error?.response?.data?.issues;
+    if (Array.isArray(issues) && issues.length > 0) {
+      ElMessage.error(`${issues[0].path || "payload"}: ${issues[0].message}`);
+    } else {
+      ElMessage.error(error?.response?.data?.message || "保存通知设置失败");
+    }
+  } finally {
+    loading.notifySettings = false;
+  }
+}
+
+if (authToken.value) {
+  fetchUsers();
+  loadNotificationSettings();
+  fetchRechargeRecords();
+}
+</script>
+
+<style scoped>
+.policy-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 14px;
+}
+
+.span-2 {
+  grid-column: span 2;
+}
+
+@media (max-width: 760px) {
+  .policy-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .span-2 {
+    grid-column: span 1;
+  }
+}
+</style>
