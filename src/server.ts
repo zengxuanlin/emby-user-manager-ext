@@ -531,6 +531,10 @@ const rechargeSchema = z.object({
   note: z.string().max(500).optional(),
 });
 
+const setMembershipEndAtSchema = z.object({
+  endAt: z.string().datetime(),
+});
+
 app.post("/admin/recharges/manual", requireAdmin, async (req, res) => {
   const adminName = adminNameOf(req);
   const parsed = rechargeSchema.safeParse(req.body);
@@ -625,6 +629,71 @@ app.post("/admin/recharges/manual", requireAdmin, async (req, res) => {
     membership: result.updatedMembership,
     recharge: result.recharge,
   });
+});
+
+app.put("/admin/memberships/:embyUserId/end-at", requireAdmin, async (req, res) => {
+  const adminName = adminNameOf(req);
+  const embyUserId = asSingle(req.params.embyUserId);
+  const parsed = setMembershipEndAtSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: parsed.error.flatten() });
+  }
+
+  const user = await prisma.appUser.findUnique({
+    where: { embyUserId },
+    include: { memberships: true },
+  });
+  if (!user) {
+    return res.status(404).json({ message: "user not found" });
+  }
+
+  const nextEndAt = new Date(parsed.data.endAt);
+  const now = nowUtc();
+  const nextStatus = nextEndAt > now ? MembershipStatus.ACTIVE : MembershipStatus.EXPIRED;
+  const membership = user.memberships[0];
+  const oldEndAt = membership?.endAt ?? null;
+
+  const updatedMembership = membership
+    ? await prisma.membership.update({
+        where: { id: membership.id },
+        data: {
+          status: nextStatus,
+          startAt: membership.startAt ?? now,
+          endAt: nextEndAt,
+        },
+      })
+    : await prisma.membership.create({
+        data: {
+          userId: user.id,
+          status: nextStatus,
+          startAt: now,
+          endAt: nextEndAt,
+        },
+      });
+
+  await syncUserMembershipToEmby(
+    user.id,
+    user.embyUserId,
+    nextStatus === MembershipStatus.ACTIVE ? "ACTIVE" : "EXPIRED",
+    updatedMembership.endAt ?? null,
+  );
+
+  await prisma.auditLog.create({
+    data: {
+      actor: adminName,
+      action: "MEMBERSHIP_END_AT_SET",
+      targetType: "AppUser",
+      targetId: user.id,
+      detailJson: JSON.stringify({
+        embyUserId: user.embyUserId,
+        oldEndAt: oldEndAt?.toISOString() ?? null,
+        newEndAt: updatedMembership.endAt?.toISOString() ?? null,
+        status: updatedMembership.status,
+      }),
+    },
+  });
+
+  res.json({ ok: true, membership: updatedMembership });
 });
 
 app.get("/admin/recharges", requireAdmin, async (req, res) => {

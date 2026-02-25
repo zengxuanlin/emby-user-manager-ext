@@ -161,6 +161,9 @@ export function createAdminClient(settings: AdminSettings) {
     manualRecharge(payload: { embyUserId: string; amount: number; months: number; note?: string }) {
       return http.post("/admin/recharges/manual", payload);
     },
+    setMembershipEndAt(embyUserId: string, endAt: string) {
+      return http.put(`/admin/memberships/${encodeURIComponent(embyUserId)}/end-at`, { endAt });
+    },
     getMembership(embyUserId: string) {
       return http.get("/admin/memberships/" + encodeURIComponent(embyUserId));
     },

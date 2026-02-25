@@ -105,6 +105,7 @@
                       <el-dropdown-item command="policy">编辑权限</el-dropdown-item>
                       <el-dropdown-item command="password">修改密码</el-dropdown-item>
                       <el-dropdown-item command="recharge">充值</el-dropdown-item>
+                      <el-dropdown-item command="expiry">修改到期时间</el-dropdown-item>
                       <el-dropdown-item command="delete" divided>
                         <span style="color: #d03050;">删除用户</span>
                       </el-dropdown-item>
@@ -349,6 +350,33 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-model="expiryDialogVisible"
+      width="520px"
+      :title="`修改到期时间 - ${expiryEditingUser?.embyUsername || ''}`"
+      destroy-on-close
+    >
+      <el-form label-position="top">
+        <el-form-item label="Emby User ID">
+          <el-input :model-value="expiryForm.embyUserId" disabled />
+        </el-form-item>
+        <el-form-item label="新的到期时间">
+          <el-date-picker
+            v-model="expiryForm.endAt"
+            type="datetime"
+            placeholder="请选择新的到期时间"
+            style="width: 100%;"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="expiryDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="loading.expiry" @click="submitEndAtUpdate">
+          保存
+        </el-button>
+      </template>
+    </el-dialog>
     </template>
   </div>
 </template>
@@ -387,9 +415,11 @@ const createDialogVisible = ref(false);
 const passwordDialogVisible = ref(false);
 const policyDialogVisible = ref(false);
 const rechargeDialogVisible = ref(false);
+const expiryDialogVisible = ref(false);
 const passwordEditingUser = ref<UserListItem | null>(null);
 const policyEditingUser = ref<UserListItem | null>(null);
 const rechargeEditingUser = ref<UserListItem | null>(null);
+const expiryEditingUser = ref<UserListItem | null>(null);
 const originalPolicy = ref<EmbyUserPolicy>({});
 const localProfile = reactive({
   email: "",
@@ -429,6 +459,14 @@ const rechargeForm = reactive({
   note: "",
 });
 
+const expiryForm = reactive<{
+  embyUserId: string;
+  endAt: Date | null;
+}>({
+  embyUserId: "",
+  endAt: null,
+});
+
 const createForm = reactive({
   username: "",
   password: "",
@@ -453,6 +491,7 @@ const loading = reactive({
   login: false,
   users: false,
   recharge: false,
+  expiry: false,
   rechargeList: false,
   membership: false,
   job: false,
@@ -655,6 +694,13 @@ function openRechargeDialog(row: UserListItem) {
   rechargeDialogVisible.value = true;
 }
 
+function openExpiryDialog(row: UserListItem) {
+  expiryEditingUser.value = row;
+  expiryForm.embyUserId = row.embyUserId;
+  expiryForm.endAt = row.membershipEndAt ? new Date(row.membershipEndAt) : new Date();
+  expiryDialogVisible.value = true;
+}
+
 function handleUserAction(command: string, row: UserListItem) {
   if (command === "policy") {
     openPolicyDialog(row);
@@ -668,8 +714,31 @@ function handleUserAction(command: string, row: UserListItem) {
     openRechargeDialog(row);
     return;
   }
+  if (command === "expiry") {
+    openExpiryDialog(row);
+    return;
+  }
   if (command === "delete") {
     void removeUser(row);
+  }
+}
+
+async function submitEndAtUpdate() {
+  if (!expiryForm.embyUserId.trim() || !expiryForm.endAt) {
+    ElMessage.warning("请选择到期时间");
+    return;
+  }
+
+  loading.expiry = true;
+  try {
+    await client().setMembershipEndAt(expiryForm.embyUserId, expiryForm.endAt.toISOString());
+    ElMessage.success("到期时间已更新");
+    expiryDialogVisible.value = false;
+    await fetchUsers();
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.message || "更新到期时间失败");
+  } finally {
+    loading.expiry = false;
   }
 }
 
