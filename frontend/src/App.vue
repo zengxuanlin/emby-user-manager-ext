@@ -28,6 +28,74 @@
 
     <section class="card">
       <el-tabs v-model="tab">
+        <el-tab-pane label="实时活动" name="activity">
+          <div class="row">
+            <el-button type="primary" @click="fetchActivities" :loading="loading.activities">刷新活动</el-button>
+            <span>最近刷新：{{ formatToChinaTime(activitiesFetchedAt) }}</span>
+          </div>
+
+          <div class="activity-desktop top-gap">
+            <el-table :data="activities" stripe>
+              <el-table-column prop="userName" label="账号" min-width="120">
+                <template #default="{ row }">
+                  {{ row.userName || "-" }}
+                </template>
+              </el-table-column>
+              <el-table-column prop="deviceName" label="设备" min-width="160">
+                <template #default="{ row }">
+                  {{ row.deviceName || "-" }}
+                </template>
+              </el-table-column>
+              <el-table-column prop="client" label="客户端" min-width="120">
+                <template #default="{ row }">
+                  {{ row.client || "-" }}
+                </template>
+              </el-table-column>
+              <el-table-column prop="itemName" label="播放内容" min-width="240">
+                <template #default="{ row }">
+                  {{ row.itemName || "-" }}
+                </template>
+              </el-table-column>
+              <el-table-column label="状态" min-width="100">
+                <template #default="{ row }">
+                  <el-tag :type="row.playbackState === 'PLAYING' ? 'success' : row.playbackState === 'PAUSED' ? 'warning' : 'info'">
+                    {{ row.playbackState }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="进度" min-width="140">
+                <template #default="{ row }">
+                  {{ formatPlaybackProgress(row.positionTicks, row.runtimeTicks) }}
+                </template>
+              </el-table-column>
+              <el-table-column label="最近活动" min-width="180">
+                <template #default="{ row }">
+                  {{ formatToChinaTime(row.lastActivityAt) }}
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+
+          <div class="activity-mobile top-gap">
+            <el-empty v-if="activities.length === 0" description="暂无实时活动" />
+            <div v-else class="activity-cards">
+              <div class="activity-card" v-for="item in activities" :key="item.sessionId || `${item.userName}-${item.deviceName}-${item.lastActivityAt}`">
+                <div class="activity-title">
+                  <strong>{{ item.userName || "未知账号" }}</strong>
+                  <el-tag size="small" :type="item.playbackState === 'PLAYING' ? 'success' : item.playbackState === 'PAUSED' ? 'warning' : 'info'">
+                    {{ item.playbackState }}
+                  </el-tag>
+                </div>
+                <div>设备：{{ item.deviceName || "-" }}</div>
+                <div>客户端：{{ item.client || "-" }}</div>
+                <div>内容：{{ item.itemName || "-" }}</div>
+                <div>进度：{{ formatPlaybackProgress(item.positionTicks, item.runtimeTicks) }}</div>
+                <div>最近活动：{{ formatToChinaTime(item.lastActivityAt) }}</div>
+              </div>
+            </div>
+          </div>
+        </el-tab-pane>
+
         <el-tab-pane label="用户管理" name="users">
           <el-alert
             title="支持直接新增 Emby 用户；已有用户会从 Emby 拉取，不需要手动输入 Emby User ID。"
@@ -388,6 +456,7 @@ import { ArrowDown } from "@element-plus/icons-vue";
 import {
   createAdminClient,
   login,
+  type EmbyActivityItem,
   type EmbyUserPolicy,
   type NotificationSettings,
   type RechargeRecordItem,
@@ -401,9 +470,11 @@ const loginForm = reactive({
   password: "",
 });
 
-const tab = ref("users");
+const tab = ref("activity");
 const search = ref("");
 const users = ref<UserListItem[]>([]);
+const activities = ref<EmbyActivityItem[]>([]);
+const activitiesFetchedAt = ref<string | null>(null);
 const membershipQueryId = ref("");
 const membershipResult = ref("尚未查询");
 const jobResult = ref("尚未执行");
@@ -489,6 +560,7 @@ const notificationForm = reactive<NotificationSettings>({
 
 const loading = reactive({
   login: false,
+  activities: false,
   users: false,
   recharge: false,
   expiry: false,
@@ -530,6 +602,27 @@ function formatToChinaTime(value?: string | null): string {
   }).format(date);
 }
 
+function formatPlaybackProgress(positionTicks: number | null, runtimeTicks: number | null): string {
+  if (!positionTicks || !runtimeTicks || runtimeTicks <= 0) {
+    return "-";
+  }
+  const ratio = Math.max(0, Math.min(100, (positionTicks / runtimeTicks) * 100));
+  return `${ratio.toFixed(1)}%`;
+}
+
+async function fetchActivities() {
+  loading.activities = true;
+  try {
+    const { data } = await client().listActivities();
+    activities.value = data.activities;
+    activitiesFetchedAt.value = data.fetchedAt;
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.message || "查询实时活动失败");
+  } finally {
+    loading.activities = false;
+  }
+}
+
 async function fetchUsers() {
   loading.users = true;
   try {
@@ -557,7 +650,7 @@ async function submitLogin() {
     localStorage.setItem("emby_auth_token", data.token);
     loginForm.password = "";
     ElMessage.success("登录成功");
-    await Promise.all([fetchUsers(), loadNotificationSettings(), fetchRechargeRecords()]);
+    await Promise.all([fetchActivities(), fetchUsers(), loadNotificationSettings(), fetchRechargeRecords()]);
   } catch (error: any) {
     ElMessage.error(error?.response?.data?.message || "登录失败");
   } finally {
@@ -894,6 +987,7 @@ async function submitNotificationSettings() {
 }
 
 if (authToken.value) {
+  fetchActivities();
   fetchUsers();
   loadNotificationSettings();
   fetchRechargeRecords();
@@ -911,6 +1005,32 @@ if (authToken.value) {
   grid-column: span 2;
 }
 
+.activity-mobile {
+  display: none;
+}
+
+.activity-cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.activity-card {
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  padding: 10px;
+  background: #fff;
+  display: grid;
+  gap: 4px;
+}
+
+.activity-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 @media (max-width: 760px) {
   .policy-grid {
     grid-template-columns: 1fr;
@@ -918,6 +1038,14 @@ if (authToken.value) {
 
   .span-2 {
     grid-column: span 1;
+  }
+
+  .activity-desktop {
+    display: none;
+  }
+
+  .activity-mobile {
+    display: block;
   }
 }
 </style>

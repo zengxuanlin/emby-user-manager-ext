@@ -25,6 +25,27 @@ interface EmbyUserListItem {
   };
 }
 
+interface EmbySessionItem {
+  Id?: string;
+  UserId?: string;
+  UserName?: string;
+  DeviceName?: string;
+  Client?: string;
+  LastActivityDate?: string;
+  NowPlayingItem?: {
+    Name?: string;
+    SeriesName?: string;
+    Type?: string;
+    ParentIndexNumber?: number;
+    IndexNumber?: number;
+    RunTimeTicks?: number;
+  };
+  PlayState?: {
+    IsPaused?: boolean;
+    PositionTicks?: number;
+  };
+}
+
 function buildUrl(path: string): string {
   const normalized = path.startsWith("/") ? path : `/${path}`;
   const url = new URL(`${config.embyBaseUrl}${normalized}`);
@@ -74,6 +95,20 @@ export interface EmbyUserSummary {
   embyCreatedAt: string | null;
 }
 
+export interface EmbyRealtimeActivity {
+  sessionId: string;
+  userName: string | null;
+  userId: string | null;
+  deviceName: string | null;
+  client: string | null;
+  itemName: string | null;
+  itemType: string | null;
+  playbackState: "PLAYING" | "PAUSED" | "IDLE";
+  positionTicks: number | null;
+  runtimeTicks: number | null;
+  lastActivityAt: string | null;
+}
+
 export async function listEmbyUsers(): Promise<EmbyUserSummary[]> {
   const response = await embyFetch("/Users");
   if (!response.ok) {
@@ -86,6 +121,42 @@ export async function listEmbyUsers(): Promise<EmbyUserSummary[]> {
     embyDisabled: Boolean(item.Policy?.IsDisabled),
     embyCreatedAt: item.DateCreated ?? null,
   }));
+}
+
+export async function listEmbyRealtimeActivities(): Promise<EmbyRealtimeActivity[]> {
+  const response = await embyFetch("/Sessions");
+  if (!response.ok) {
+    throw new Error(`Emby sessions query failed: ${await parseError(response)}`);
+  }
+  const sessions = (await response.json()) as EmbySessionItem[];
+
+  return sessions.map((session) => {
+    const nowPlaying = session.NowPlayingItem;
+    const itemName = nowPlaying?.SeriesName
+      ? `${nowPlaying.SeriesName} - ${nowPlaying.Name ?? ""}`.trim()
+      : (nowPlaying?.Name ?? null);
+    const playbackState: "PLAYING" | "PAUSED" | "IDLE" = nowPlaying
+      ? session.PlayState?.IsPaused
+        ? "PAUSED"
+        : "PLAYING"
+      : "IDLE";
+
+    return {
+      sessionId: session.Id ?? "",
+      userName: session.UserName ?? null,
+      userId: session.UserId ?? null,
+      deviceName: session.DeviceName ?? null,
+      client: session.Client ?? null,
+      itemName,
+      itemType: nowPlaying?.Type ?? null,
+      playbackState,
+      positionTicks: typeof session.PlayState?.PositionTicks === "number"
+        ? session.PlayState.PositionTicks
+        : null,
+      runtimeTicks: typeof nowPlaying?.RunTimeTicks === "number" ? nowPlaying.RunTimeTicks : null,
+      lastActivityAt: session.LastActivityDate ?? null,
+    };
+  });
 }
 
 async function tryCreateEmbyUser(username: string): Promise<EmbyUserDetail> {

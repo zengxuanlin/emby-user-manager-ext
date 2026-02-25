@@ -13,6 +13,7 @@ import {
   createEmbyUser,
   deleteEmbyUser,
   getEmbyUserPolicy,
+  listEmbyRealtimeActivities,
   listEmbyUsers,
   setEmbyUserPolicy,
   syncUserMembershipToEmby,
@@ -172,6 +173,11 @@ app.get("/admin/emby/users", requireAdmin, async (req, res) => {
   });
 
   res.json({ users });
+});
+
+app.get("/admin/emby/activities", requireAdmin, async (_req, res) => {
+  const activities = await listEmbyRealtimeActivities();
+  res.json({ activities, fetchedAt: new Date().toISOString() });
 });
 
 app.post("/admin/emby/sync-users", requireAdmin, async (req, res) => {

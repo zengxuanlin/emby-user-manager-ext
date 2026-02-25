@@ -59,6 +59,20 @@ export interface RechargeRecordItem {
   };
 }
 
+export interface EmbyActivityItem {
+  sessionId: string;
+  userName: string | null;
+  userId: string | null;
+  deviceName: string | null;
+  client: string | null;
+  itemName: string | null;
+  itemType: string | null;
+  playbackState: "PLAYING" | "PAUSED" | "IDLE";
+  positionTicks: number | null;
+  runtimeTicks: number | null;
+  lastActivityAt: string | null;
+}
+
 export interface NotificationSettings {
   senderEmail: string | null;
   emailAuthCode: string | null;
@@ -118,6 +132,9 @@ export function createAdminClient(settings: AdminSettings) {
     },
     listUsers(q = "") {
       return http.get<{ users: UserListItem[] }>("/admin/emby/users", { params: { q } });
+    },
+    listActivities() {
+      return http.get<{ activities: EmbyActivityItem[]; fetchedAt: string }>("/admin/emby/activities");
     },
     syncEmbyUsers() {
       return http.post<{
