@@ -104,6 +104,9 @@
                     <el-dropdown-menu>
                       <el-dropdown-item command="policy">编辑权限</el-dropdown-item>
                       <el-dropdown-item command="password">修改密码</el-dropdown-item>
+                      <el-dropdown-item command="delete" divided>
+                        <span style="color: #d03050;">删除用户</span>
+                      </el-dropdown-item>
                     </el-dropdown-menu>
                   </template>
                 </el-dropdown>
@@ -326,7 +329,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from "vue";
-import { ElMessage } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 import { ArrowDown } from "@element-plus/icons-vue";
 import {
   createAdminClient,
@@ -618,6 +621,37 @@ function handleUserAction(command: string, row: UserListItem) {
   }
   if (command === "password") {
     openPasswordDialog(row);
+    return;
+  }
+  if (command === "delete") {
+    void removeUser(row);
+  }
+}
+
+async function removeUser(row: UserListItem) {
+  try {
+    await ElMessageBox.confirm(
+      `确认删除 Emby 用户 ${row.embyUsername}（${row.embyUserId}）吗？`,
+      "删除确认",
+      {
+        confirmButtonText: "删除",
+        cancelButtonText: "取消",
+        type: "warning",
+      },
+    );
+  } catch {
+    return;
+  }
+
+  loading.users = true;
+  try {
+    await client().deleteEmbyUser(row.embyUserId);
+    ElMessage.success("用户已删除");
+    await fetchUsers();
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.message || "删除用户失败");
+  } finally {
+    loading.users = false;
   }
 }
 

@@ -11,7 +11,9 @@ interface EmbyServerInfo {
 interface EmbyUserDetail {
   Id: string;
   Name: string;
-  Policy?: Record<string, unknown>;
+  Policy?: Record<string, unknown> & {
+    SimultaneousStreamLimit?: number;
+  };
 }
 
 interface EmbyUserListItem {
@@ -143,6 +145,12 @@ export async function createEmbyUser(
   password?: string,
 ): Promise<{ embyUserId: string; embyUsername: string }> {
   const created = await tryCreateEmbyUser(username);
+  const user = await getEmbyUser(created.Id);
+  const nextPolicy = {
+    ...(user.Policy ?? {}),
+    SimultaneousStreamLimit: 1,
+  };
+  await updateEmbyUserPolicy(created.Id, nextPolicy);
   if (password && password.trim()) {
     await setEmbyUserPassword(created.Id, password.trim());
   }
@@ -150,6 +158,23 @@ export async function createEmbyUser(
     embyUserId: created.Id,
     embyUsername: created.Name,
   };
+}
+
+export async function deleteEmbyUser(embyUserId: string): Promise<void> {
+  const candidates: Array<{ path: string; init: RequestInit }> = [
+    { path: `/Users/${encodeURIComponent(embyUserId)}`, init: { method: "DELETE" } },
+    { path: `/Users/Delete?Id=${encodeURIComponent(embyUserId)}`, init: { method: "POST" } },
+  ];
+
+  let lastError = "unknown";
+  for (const candidate of candidates) {
+    const response = await embyFetch(candidate.path, candidate.init);
+    if (response.ok) {
+      return;
+    }
+    lastError = await parseError(response);
+  }
+  throw new Error(`Emby delete user failed: ${lastError}`);
 }
 
 async function getEmbyUser(embyUserId: string): Promise<EmbyUserDetail> {

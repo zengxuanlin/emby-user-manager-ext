@@ -11,6 +11,7 @@ import { sendEmail } from "./email.js";
 import { getNotificationSettings, updateNotificationSettings } from "./settings.js";
 import {
   createEmbyUser,
+  deleteEmbyUser,
   getEmbyUserPolicy,
   listEmbyUsers,
   setEmbyUserPolicy,
@@ -235,6 +236,35 @@ app.post("/admin/emby/sync-users", requireAdmin, async (req, res) => {
     created,
     updated,
   });
+});
+
+app.delete("/admin/emby/users/:embyUserId", requireAdmin, async (req, res) => {
+  const adminName = adminNameOf(req);
+  const embyUserId = asSingle(req.params.embyUserId);
+
+  await deleteEmbyUser(embyUserId);
+
+  const local = await prisma.appUser.findUnique({
+    where: { embyUserId },
+    select: { id: true },
+  });
+  if (local) {
+    await prisma.appUser.delete({ where: { id: local.id } });
+  }
+
+  await prisma.auditLog.create({
+    data: {
+      actor: adminName,
+      action: "EMBY_USER_DELETE",
+      targetType: "EmbyUser",
+      targetId: embyUserId,
+      detailJson: JSON.stringify({
+        removedLocalUser: Boolean(local),
+      }),
+    },
+  });
+
+  res.json({ ok: true });
 });
 
 const createEmbyUserSchema = z.object({

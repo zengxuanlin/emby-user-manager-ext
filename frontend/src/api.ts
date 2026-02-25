@@ -110,6 +110,9 @@ export function createAdminClient(settings: AdminSettings) {
     }) {
       return http.post("/admin/emby/users/create", payload);
     },
+    deleteEmbyUser(embyUserId: string) {
+      return http.delete(`/admin/emby/users/${encodeURIComponent(embyUserId)}`);
+    },
     upsertUser(payload: { embyUserId: string; embyUsername: string; email?: string }) {
       return http.post("/admin/users/upsert", payload);
     },
