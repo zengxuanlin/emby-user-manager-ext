@@ -104,6 +104,7 @@
                     <el-dropdown-menu>
                       <el-dropdown-item command="policy">编辑权限</el-dropdown-item>
                       <el-dropdown-item command="password">修改密码</el-dropdown-item>
+                      <el-dropdown-item command="recharge">充值</el-dropdown-item>
                       <el-dropdown-item command="delete" divided>
                         <span style="color: #d03050;">删除用户</span>
                       </el-dropdown-item>
@@ -113,19 +114,6 @@
               </template>
             </el-table-column>
           </el-table>
-        </el-tab-pane>
-
-        <el-tab-pane label="手工充值" name="recharge">
-          <div class="grid cols-4">
-            <el-input v-model="rechargeForm.embyUserId" placeholder="Emby User ID" />
-            <el-input-number v-model="rechargeForm.amount" :min="0.01" :precision="2" controls-position="right" />
-            <el-input-number v-model="rechargeForm.months" :min="1" :max="36" controls-position="right" />
-            <el-input v-model="rechargeForm.note" placeholder="备注（可选）" />
-          </div>
-          <el-button type="warning" class="top-gap" @click="submitRecharge" :loading="loading.recharge">
-            提交充值
-          </el-button>
-          <pre class="result">{{ rechargeResult }}</pre>
         </el-tab-pane>
 
         <el-tab-pane label="充值记录" name="recharge-records">
@@ -323,6 +311,44 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-model="rechargeDialogVisible"
+      width="520px"
+      :title="`手工充值 - ${rechargeEditingUser?.embyUsername || ''}`"
+      destroy-on-close
+    >
+      <el-form label-position="top">
+        <el-form-item label="Emby User ID">
+          <el-input :model-value="rechargeForm.embyUserId" disabled />
+        </el-form-item>
+        <el-form-item label="充值金额">
+          <el-input-number
+            v-model="rechargeForm.amount"
+            :min="0.01"
+            :precision="2"
+            controls-position="right"
+          />
+        </el-form-item>
+        <el-form-item label="月数">
+          <el-input-number
+            v-model="rechargeForm.months"
+            :min="1"
+            :max="36"
+            controls-position="right"
+          />
+        </el-form-item>
+        <el-form-item label="备注（可选）">
+          <el-input v-model="rechargeForm.note" placeholder="后台手工续费" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="rechargeDialogVisible = false">取消</el-button>
+        <el-button type="warning" :loading="loading.recharge" @click="submitRecharge">
+          提交充值
+        </el-button>
+      </template>
+    </el-dialog>
     </template>
   </div>
 </template>
@@ -352,7 +378,6 @@ const search = ref("");
 const users = ref<UserListItem[]>([]);
 const membershipQueryId = ref("");
 const membershipResult = ref("尚未查询");
-const rechargeResult = ref("尚未提交");
 const jobResult = ref("尚未执行");
 const syncResult = ref("尚未同步");
 const notifyResult = ref("尚未保存");
@@ -361,8 +386,10 @@ const rechargeRecordQuery = ref("");
 const createDialogVisible = ref(false);
 const passwordDialogVisible = ref(false);
 const policyDialogVisible = ref(false);
+const rechargeDialogVisible = ref(false);
 const passwordEditingUser = ref<UserListItem | null>(null);
 const policyEditingUser = ref<UserListItem | null>(null);
+const rechargeEditingUser = ref<UserListItem | null>(null);
 const originalPolicy = ref<EmbyUserPolicy>({});
 const localProfile = reactive({
   email: "",
@@ -506,17 +533,22 @@ function logout() {
 }
 
 async function submitRecharge() {
+  if (!rechargeForm.embyUserId.trim()) {
+    ElMessage.warning("未选择充值用户");
+    return;
+  }
   loading.recharge = true;
   try {
-    const { data } = await client().manualRecharge({
+    await client().manualRecharge({
       embyUserId: rechargeForm.embyUserId.trim(),
       amount: rechargeForm.amount,
       months: rechargeForm.months,
       note: rechargeForm.note.trim() || undefined,
     });
-    rechargeResult.value = JSON.stringify(data, null, 2);
     ElMessage.success("充值成功");
+    rechargeDialogVisible.value = false;
     await fetchRechargeRecords();
+    await fetchUsers();
   } catch (error: any) {
     ElMessage.error(error?.response?.data?.message || "充值失败");
   } finally {
@@ -614,6 +646,15 @@ function openPasswordDialog(row: UserListItem) {
   passwordDialogVisible.value = true;
 }
 
+function openRechargeDialog(row: UserListItem) {
+  rechargeEditingUser.value = row;
+  rechargeForm.embyUserId = row.embyUserId;
+  rechargeForm.amount = 30;
+  rechargeForm.months = 1;
+  rechargeForm.note = "";
+  rechargeDialogVisible.value = true;
+}
+
 function handleUserAction(command: string, row: UserListItem) {
   if (command === "policy") {
     openPolicyDialog(row);
@@ -621,6 +662,10 @@ function handleUserAction(command: string, row: UserListItem) {
   }
   if (command === "password") {
     openPasswordDialog(row);
+    return;
+  }
+  if (command === "recharge") {
+    openRechargeDialog(row);
     return;
   }
   if (command === "delete") {
