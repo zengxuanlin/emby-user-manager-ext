@@ -111,8 +111,10 @@ async function tryCreateEmbyUser(username: string): Promise<EmbyUserDetail> {
 
 async function setEmbyUserPassword(embyUserId: string, password: string): Promise<void> {
   const payloads: Array<Record<string, unknown>> = [
-    { CurrentPw: "", NewPw: password, ResetPassword: true },
+    { Id: embyUserId, CurrentPw: "", NewPw: password, ResetPassword: false },
+    { CurrentPw: "", NewPw: password, ResetPassword: false },
     { CurrentPw: "", NewPw: password },
+    { Id: embyUserId, NewPw: password },
   ];
 
   let lastError = "unknown";
