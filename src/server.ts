@@ -39,6 +39,26 @@ function adminNameOf(req: express.Request): string {
   return req.adminName ?? "unknown-admin";
 }
 
+function formatToShanghaiTime(value: string | Date | null | undefined): string {
+  if (!value) {
+    return "-";
+  }
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return typeof value === "string" ? value : "-";
+  }
+  return new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(date);
+}
+
 function applyExpireJobSchedule(expireJobCron: string): void {
   if (expirationTask) {
     expirationTask.stop();
@@ -1027,6 +1047,7 @@ app.post("/webhooks/emby", async (req, res) => {
           : ingestion.mediaKind === "series"
             ? `Emby 剧集入库: ${ingestion.seriesName ?? ingestion.itemTitle}`
             : `Emby 新入库通知: ${ingestion.itemTitle}`;
+      const ingestTimeText = formatToShanghaiTime(ingestion.addedAt ?? eventTime ?? null);
       const bodyLines =
         ingestion.mediaKind === "movie"
           ? [
@@ -1035,7 +1056,7 @@ app.post("/webhooks/emby", async (req, res) => {
               `年份: ${ingestion.year ?? "-"}`,
               `媒体库: ${ingestion.libraryName ?? "-"}`,
               `资源ID: ${ingestion.itemId ?? "-"}`,
-              `时间: ${ingestion.addedAt ?? eventTime ?? "-"}`,
+              `时间: ${ingestTimeText}`,
             ]
           : ingestion.mediaKind === "series"
             ? [
@@ -1045,7 +1066,7 @@ app.post("/webhooks/emby", async (req, res) => {
                 `类型: ${ingestion.itemType ?? "-"}`,
                 `媒体库: ${ingestion.libraryName ?? "-"}`,
                 `剧集ID: ${ingestion.seriesId ?? "-"}`,
-                `时间: ${ingestion.addedAt ?? eventTime ?? "-"}`,
+                `时间: ${ingestTimeText}`,
                 "说明: 同一剧集只会发送一次入库通知。",
               ]
             : [
@@ -1053,7 +1074,7 @@ app.post("/webhooks/emby", async (req, res) => {
                 `片名: ${ingestion.itemTitle}`,
                 `类型: ${ingestion.itemType ?? "-"}`,
                 `媒体库: ${ingestion.libraryName ?? "-"}`,
-                `时间: ${ingestion.addedAt ?? eventTime ?? "-"}`,
+                `时间: ${ingestTimeText}`,
               ];
 
       for (const receiver of receivers) {
@@ -1138,7 +1159,7 @@ async function runExpirationJob(): Promise<{ expiredCount: number }> {
         userId: membership.userId,
         to: membership.user.email,
         subject: "Emby 会员已到期",
-        body: `你的账户已于 ${membership.endAt?.toISOString() ?? "未知时间"} 到期，请及时续费以恢复会员权限。`,
+        body: `你的账户已于 ${formatToShanghaiTime(membership.endAt)} 到期，请及时续费以恢复会员权限。`,
         eventType: "MEMBERSHIP_EXPIRED",
       });
     }
