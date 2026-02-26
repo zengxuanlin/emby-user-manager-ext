@@ -1133,12 +1133,12 @@ async function runExpirationJob(): Promise<{ expiredCount: number }> {
       membership.endAt ?? null,
     );
 
-    if (membership.user.email && membership.user.emailPushEnabled) {
+    if (membership.user.email) {
       await sendEmail({
         userId: membership.userId,
         to: membership.user.email,
         subject: "Emby 会员已到期",
-        body: `你的会员已于 ${membership.endAt?.toISOString() ?? "未知时间"} 到期。`,
+        body: `你的账户已于 ${membership.endAt?.toISOString() ?? "未知时间"} 到期，请及时续费以恢复会员权限。`,
         eventType: "MEMBERSHIP_EXPIRED",
       });
     }
