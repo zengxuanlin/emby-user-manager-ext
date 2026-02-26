@@ -264,8 +264,52 @@
         </el-tab-pane>
 
         <el-tab-pane label="任务与系统" name="jobs">
-          <div class="row">
-            <el-button type="danger" @click="runExpireJob" :loading="loading.job">执行到期任务</el-button>
+          <div class="grid cols-2">
+            <div class="row">
+              <span>到期任务调度模式</span>
+              <el-radio-group v-model="expireJobCronMode">
+                <el-radio-button label="simple">简易配置</el-radio-button>
+                <el-radio-button label="custom">Cron表达式</el-radio-button>
+              </el-radio-group>
+            </div>
+
+            <template v-if="expireJobCronMode === 'simple'">
+              <div class="row">
+                <span>执行周期</span>
+                <el-radio-group v-model="expireJobSimple.kind">
+                  <el-radio-button label="daily">每天</el-radio-button>
+                  <el-radio-button label="weekly">每周</el-radio-button>
+                </el-radio-group>
+              </div>
+              <div class="grid cols-3">
+                <el-input-number v-model="expireJobSimple.hour" :min="0" :max="23" controls-position="right" />
+                <el-input-number
+                  v-model="expireJobSimple.minute"
+                  :min="0"
+                  :max="59"
+                  controls-position="right"
+                />
+                <el-select v-if="expireJobSimple.kind === 'weekly'" v-model="expireJobSimple.weekday">
+                  <el-option v-for="option in weekDayOptions" :key="option.value" :label="option.label" :value="option.value" />
+                </el-select>
+              </div>
+              <div>预览 Cron：<code>{{ getSimpleExpireCron() }}</code></div>
+            </template>
+
+            <template v-else>
+              <el-input v-model="expireJobCronInput" placeholder="例如: 5 2 * * *" />
+            </template>
+
+            <div class="row">
+              <el-button type="primary" @click="submitExpireJobCron" :loading="loading.jobCron">
+                保存调度配置
+              </el-button>
+              <span>{{ expireJobCronResult }}</span>
+            </div>
+          </div>
+
+          <div class="row top-gap">
+            <el-button type="danger" @click="runExpireJob" :loading="loading.job">立即执行到期任务</el-button>
             <span>{{ jobResult }}</span>
           </div>
         </el-tab-pane>
@@ -480,6 +524,7 @@ const membershipResult = ref("尚未查询");
 const jobResult = ref("尚未执行");
 const syncResult = ref("尚未同步");
 const notifyResult = ref("尚未保存");
+const expireJobCronResult = ref("尚未保存");
 const rechargeRecords = ref<RechargeRecordItem[]>([]);
 const rechargeRecordQuery = ref("");
 const createDialogVisible = ref(false);
@@ -558,6 +603,30 @@ const notificationForm = reactive<NotificationSettings>({
   ingestionPushEnabled: true,
 });
 
+const weekDayOptions = [
+  { value: "0", label: "周日" },
+  { value: "1", label: "周一" },
+  { value: "2", label: "周二" },
+  { value: "3", label: "周三" },
+  { value: "4", label: "周四" },
+  { value: "5", label: "周五" },
+  { value: "6", label: "周六" },
+];
+
+const expireJobCronMode = ref<"simple" | "custom">("simple");
+const expireJobCronInput = ref("5 2 * * *");
+const expireJobSimple = reactive<{
+  kind: "daily" | "weekly";
+  hour: number;
+  minute: number;
+  weekday: string;
+}>({
+  kind: "daily",
+  hour: 2,
+  minute: 5,
+  weekday: "1",
+});
+
 const loading = reactive({
   login: false,
   activities: false,
@@ -571,6 +640,7 @@ const loading = reactive({
   createUser: false,
   passwordSave: false,
   notifySettings: false,
+  jobCron: false,
   policyLoad: false,
   policySave: false,
 });
@@ -610,6 +680,47 @@ function formatPlaybackProgress(positionTicks: number | null, runtimeTicks: numb
   return `${ratio.toFixed(1)}%`;
 }
 
+function getSimpleExpireCron(): string {
+  const minute = Math.max(0, Math.min(59, Number(expireJobSimple.minute)));
+  const hour = Math.max(0, Math.min(23, Number(expireJobSimple.hour)));
+  if (expireJobSimple.kind === "weekly") {
+    return `${minute} ${hour} * * ${expireJobSimple.weekday}`;
+  }
+  return `${minute} ${hour} * * *`;
+}
+
+function applyCronToSimpleForm(expr: string): boolean {
+  const parts = expr.trim().split(/\s+/);
+  if (parts.length !== 5) {
+    return false;
+  }
+  const [minute, hour, dayOfMonth, month, weekDay] = parts;
+  if (dayOfMonth !== "*" || month !== "*") {
+    return false;
+  }
+  if (!/^\d+$/.test(minute) || !/^\d+$/.test(hour)) {
+    return false;
+  }
+  const minuteNum = Number(minute);
+  const hourNum = Number(hour);
+  if (minuteNum < 0 || minuteNum > 59 || hourNum < 0 || hourNum > 23) {
+    return false;
+  }
+
+  expireJobSimple.minute = minuteNum;
+  expireJobSimple.hour = hourNum;
+  if (weekDay === "*") {
+    expireJobSimple.kind = "daily";
+    return true;
+  }
+  if (/^[0-6]$/.test(weekDay)) {
+    expireJobSimple.kind = "weekly";
+    expireJobSimple.weekday = weekDay;
+    return true;
+  }
+  return false;
+}
+
 async function fetchActivities() {
   loading.activities = true;
   try {
@@ -620,6 +731,41 @@ async function fetchActivities() {
     ElMessage.error(error?.response?.data?.message || "查询实时活动失败");
   } finally {
     loading.activities = false;
+  }
+}
+
+async function loadExpireJobCronSettings() {
+  loading.jobCron = true;
+  try {
+    const { data } = await client().getExpireJobSettings();
+    const cronExpr = data.settings.expireJobCron.trim();
+    expireJobCronInput.value = cronExpr;
+    if (applyCronToSimpleForm(cronExpr)) {
+      expireJobCronMode.value = "simple";
+    } else {
+      expireJobCronMode.value = "custom";
+    }
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.message || "加载到期任务调度配置失败");
+  } finally {
+    loading.jobCron = false;
+  }
+}
+
+async function submitExpireJobCron() {
+  loading.jobCron = true;
+  try {
+    const expireJobCron = expireJobCronMode.value === "simple"
+      ? getSimpleExpireCron()
+      : expireJobCronInput.value.trim();
+    const { data } = await client().updateExpireJobSettings({ expireJobCron });
+    expireJobCronInput.value = data.settings.expireJobCron;
+    expireJobCronResult.value = `保存成功: ${data.settings.expireJobCron}`;
+    ElMessage.success("到期任务调度已更新");
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.message || "保存到期任务调度失败");
+  } finally {
+    loading.jobCron = false;
   }
 }
 
@@ -650,7 +796,13 @@ async function submitLogin() {
     localStorage.setItem("emby_auth_token", data.token);
     loginForm.password = "";
     ElMessage.success("登录成功");
-    await Promise.all([fetchActivities(), fetchUsers(), loadNotificationSettings(), fetchRechargeRecords()]);
+    await Promise.all([
+      fetchActivities(),
+      fetchUsers(),
+      loadNotificationSettings(),
+      loadExpireJobCronSettings(),
+      fetchRechargeRecords(),
+    ]);
   } catch (error: any) {
     ElMessage.error(error?.response?.data?.message || "登录失败");
   } finally {
@@ -990,6 +1142,7 @@ if (authToken.value) {
   fetchActivities();
   fetchUsers();
   loadNotificationSettings();
+  loadExpireJobCronSettings();
   fetchRechargeRecords();
 }
 </script>

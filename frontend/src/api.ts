@@ -82,6 +82,10 @@ export interface NotificationSettings {
   ingestionPushEnabled: boolean;
 }
 
+export interface ExpireJobSettings {
+  expireJobCron: string;
+}
+
 export function login(baseUrl: string, payload: { username: string; password: string }) {
   const http = axios.create({
     baseURL: baseUrl,
@@ -186,6 +190,15 @@ export function createAdminClient(settings: AdminSettings) {
     },
     runExpireJob() {
       return http.post("/admin/jobs/expire-memberships");
+    },
+    getExpireJobSettings() {
+      return http.get<{ settings: ExpireJobSettings }>("/admin/system/expire-job-settings");
+    },
+    updateExpireJobSettings(payload: ExpireJobSettings) {
+      return http.put<{ ok: boolean; settings: ExpireJobSettings }>(
+        "/admin/system/expire-job-settings",
+        payload,
+      );
     },
   };
 }

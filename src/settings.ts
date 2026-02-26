@@ -9,6 +9,10 @@ export interface NotificationSettingsData {
   ingestionPushEnabled: boolean;
 }
 
+export interface ExpireJobSettingsData {
+  expireJobCron: string;
+}
+
 export async function getNotificationSettings(): Promise<NotificationSettingsData> {
   const setting = await prisma.notificationSetting.upsert({
     where: { id: "default" },
@@ -16,6 +20,7 @@ export async function getNotificationSettings(): Promise<NotificationSettingsDat
       id: "default",
       smtpPort: 465,
       smtpSecure: true,
+      expireJobCron: "5 2 * * *",
       ingestionPushEnabled: true,
     },
     update: {},
@@ -43,6 +48,7 @@ export async function updateNotificationSettings(
       smtpHost: data.smtpHost,
       smtpPort: data.smtpPort,
       smtpSecure: data.smtpSecure,
+      expireJobCron: "5 2 * * *",
       ingestionPushEnabled: data.ingestionPushEnabled,
     },
     update: {
@@ -62,5 +68,43 @@ export async function updateNotificationSettings(
     smtpPort: setting.smtpPort,
     smtpSecure: setting.smtpSecure,
     ingestionPushEnabled: setting.ingestionPushEnabled,
+  };
+}
+
+export async function getExpireJobSettings(): Promise<ExpireJobSettingsData> {
+  const setting = await prisma.notificationSetting.upsert({
+    where: { id: "default" },
+    create: {
+      id: "default",
+      smtpPort: 465,
+      smtpSecure: true,
+      expireJobCron: "5 2 * * *",
+      ingestionPushEnabled: true,
+    },
+    update: {},
+  });
+
+  return {
+    expireJobCron: setting.expireJobCron,
+  };
+}
+
+export async function updateExpireJobSettings(data: ExpireJobSettingsData): Promise<ExpireJobSettingsData> {
+  const setting = await prisma.notificationSetting.upsert({
+    where: { id: "default" },
+    create: {
+      id: "default",
+      smtpPort: 465,
+      smtpSecure: true,
+      expireJobCron: data.expireJobCron,
+      ingestionPushEnabled: true,
+    },
+    update: {
+      expireJobCron: data.expireJobCron,
+    },
+  });
+
+  return {
+    expireJobCron: setting.expireJobCron,
   };
 }

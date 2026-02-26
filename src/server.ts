@@ -8,7 +8,12 @@ import { prisma } from "./db.js";
 import { createAdminSessionToken, requireAdmin } from "./auth.js";
 import { addUtcMonths, nowUtc } from "./date.js";
 import { sendEmail } from "./email.js";
-import { getNotificationSettings, updateNotificationSettings } from "./settings.js";
+import {
+  getExpireJobSettings,
+  getNotificationSettings,
+  updateExpireJobSettings,
+  updateNotificationSettings,
+} from "./settings.js";
 import {
   createEmbyUser,
   deleteEmbyUser,
@@ -24,6 +29,7 @@ import {
 const app = express();
 app.use(express.json({ limit: "1mb" }));
 app.use(morgan("dev"));
+let expirationTask: ReturnType<typeof cron.schedule> | null = null;
 
 function asSingle(value: string | string[]): string {
   return Array.isArray(value) ? value[0] ?? "" : value;
@@ -31,6 +37,20 @@ function asSingle(value: string | string[]): string {
 
 function adminNameOf(req: express.Request): string {
   return req.adminName ?? "unknown-admin";
+}
+
+function applyExpireJobSchedule(expireJobCron: string): void {
+  if (expirationTask) {
+    expirationTask.stop();
+  }
+  expirationTask = cron.schedule(expireJobCron, async () => {
+    try {
+      await runExpirationJob();
+    } catch (error) {
+      console.error("Expiration job failed:", error);
+    }
+  });
+  console.log(`[cron] membership-expire schedule set: ${expireJobCron}`);
 }
 
 app.get("/health", (_req, res) => {
@@ -1142,18 +1162,61 @@ app.post("/admin/jobs/expire-memberships", requireAdmin, async (_req, res) => {
   res.json(result);
 });
 
-cron.schedule("5 2 * * *", async () => {
-  try {
-    await runExpirationJob();
-  } catch (error) {
-    console.error("Expiration job failed:", error);
+app.get("/admin/system/expire-job-settings", requireAdmin, async (_req, res) => {
+  const settings = await getExpireJobSettings();
+  res.json({ settings });
+});
+
+const updateExpireJobSettingsSchema = z.object({
+  expireJobCron: z.string().min(1),
+});
+
+app.put("/admin/system/expire-job-settings", requireAdmin, async (req, res) => {
+  const adminName = adminNameOf(req);
+  const parsed = updateExpireJobSettingsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: parsed.error.flatten() });
   }
+
+  const expireJobCron = parsed.data.expireJobCron.trim();
+  if (!cron.validate(expireJobCron)) {
+    return res.status(400).json({ message: "invalid cron expression" });
+  }
+
+  const settings = await updateExpireJobSettings({ expireJobCron });
+  applyExpireJobSchedule(settings.expireJobCron);
+
+  await prisma.auditLog.create({
+    data: {
+      actor: adminName,
+      action: "EXPIRE_JOB_CRON_UPDATE",
+      targetType: "NotificationSetting",
+      targetId: "default",
+      detailJson: JSON.stringify({ expireJobCron: settings.expireJobCron }),
+    },
+  });
+
+  res.json({ ok: true, settings });
 });
 
 app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(error);
   res.status(500).json({ message: "internal server error" });
 });
+
+void getExpireJobSettings()
+  .then((settings) => {
+    if (cron.validate(settings.expireJobCron)) {
+      applyExpireJobSchedule(settings.expireJobCron);
+    } else {
+      console.warn(`[cron] invalid stored expression, fallback to default: ${settings.expireJobCron}`);
+      applyExpireJobSchedule("5 2 * * *");
+    }
+  })
+  .catch((error) => {
+    console.warn("[cron] failed to load stored schedule, fallback to default", error);
+    applyExpireJobSchedule("5 2 * * *");
+  });
 
 app.listen(config.port, () => {
   console.log(`Server listening on :${config.port}`);
