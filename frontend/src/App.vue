@@ -281,18 +281,24 @@
                   <el-radio-button label="weekly">每周</el-radio-button>
                 </el-radio-group>
               </div>
+              <div class="row">
+                <span>执行时间（小时:分钟）</span>
+                <small style="color: #909399;">小时范围 0-23，分钟范围 0-59</small>
+              </div>
               <div class="grid cols-3">
-                <el-input-number v-model="expireJobSimple.hour" :min="0" :max="23" controls-position="right" />
+                <el-input-number v-model="expireJobSimple.hour" :min="0" :max="23" controls-position="right" placeholder="小时" />
                 <el-input-number
                   v-model="expireJobSimple.minute"
                   :min="0"
                   :max="59"
                   controls-position="right"
+                  placeholder="分钟"
                 />
                 <el-select v-if="expireJobSimple.kind === 'weekly'" v-model="expireJobSimple.weekday">
                   <el-option v-for="option in weekDayOptions" :key="option.value" :label="option.label" :value="option.value" />
                 </el-select>
               </div>
+              <div>执行预览：<code>{{ getSimpleExpireCronHumanText() }}</code></div>
               <div>预览 Cron：<code>{{ getSimpleExpireCron() }}</code></div>
             </template>
 
@@ -687,6 +693,16 @@ function getSimpleExpireCron(): string {
     return `${minute} ${hour} * * ${expireJobSimple.weekday}`;
   }
   return `${minute} ${hour} * * *`;
+}
+
+function getSimpleExpireCronHumanText(): string {
+  const hour = String(Math.max(0, Math.min(23, Number(expireJobSimple.hour)))).padStart(2, "0");
+  const minute = String(Math.max(0, Math.min(59, Number(expireJobSimple.minute)))).padStart(2, "0");
+  if (expireJobSimple.kind === "weekly") {
+    const weekDayLabel = weekDayOptions.find((item) => item.value === expireJobSimple.weekday)?.label ?? "周一";
+    return `${weekDayLabel} ${hour}:${minute}`;
+  }
+  return `每天 ${hour}:${minute}`;
 }
 
 function applyCronToSimpleForm(expr: string): boolean {
