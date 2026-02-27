@@ -216,7 +216,7 @@ app.get("/admin/emby/users", requireAdmin, async (req, res) => {
 });
 
 app.get("/admin/emby/activities", requireAdmin, async (_req, res) => {
-  const activities = await listEmbyRealtimeActivities();
+  const activities = (await listEmbyRealtimeActivities()).filter((item) => Boolean(item.userId));
   res.json({ activities, fetchedAt: new Date().toISOString() });
 });
 

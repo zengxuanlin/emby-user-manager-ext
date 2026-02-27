@@ -2,7 +2,7 @@
   <div class="page">
     <template v-if="!isAuthenticated">
       <section class="card" style="max-width: 460px; margin: 8vh auto 0;">
-        <p class="kicker">EMBY VIP CONSOLE</p>
+        <p class="kicker">EMBY User Expansion</p>
         <h2 style="margin: 0 0 8px;">管理员登录</h2>
         <p class="subtitle">账号密码来自后端环境变量配置</p>
         <el-form label-position="top" class="top-gap">
@@ -19,7 +19,7 @@
     <template v-else>
     <header class="hero">
       <div>
-        <p class="kicker">EMBY VIP CONSOLE</p>
+        <p class="kicker">EMBY User Expansion</p>
         <h1>会员管理后台</h1>
         <p class="subtitle">手工充值、会员查询、到期任务与操作联调面板</p>
       </div>
@@ -34,49 +34,7 @@
             <span>最近刷新：{{ formatToChinaTime(activitiesFetchedAt) }}</span>
           </div>
 
-          <div class="activity-desktop top-gap">
-            <el-table :data="activities" stripe>
-              <el-table-column prop="userName" label="账号" min-width="120">
-                <template #default="{ row }">
-                  {{ row.userName || "-" }}
-                </template>
-              </el-table-column>
-              <el-table-column prop="deviceName" label="设备" min-width="160">
-                <template #default="{ row }">
-                  {{ row.deviceName || "-" }}
-                </template>
-              </el-table-column>
-              <el-table-column prop="client" label="客户端" min-width="120">
-                <template #default="{ row }">
-                  {{ row.client || "-" }}
-                </template>
-              </el-table-column>
-              <el-table-column prop="itemName" label="播放内容" min-width="240">
-                <template #default="{ row }">
-                  {{ row.itemName || "-" }}
-                </template>
-              </el-table-column>
-              <el-table-column label="状态" min-width="100">
-                <template #default="{ row }">
-                  <el-tag :type="row.playbackState === 'PLAYING' ? 'success' : row.playbackState === 'PAUSED' ? 'warning' : 'info'">
-                    {{ row.playbackState }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column label="进度" min-width="140">
-                <template #default="{ row }">
-                  {{ formatPlaybackProgress(row.positionTicks, row.runtimeTicks) }}
-                </template>
-              </el-table-column>
-              <el-table-column label="最近活动" min-width="180">
-                <template #default="{ row }">
-                  {{ formatToChinaTime(row.lastActivityAt) }}
-                </template>
-              </el-table-column>
-            </el-table>
-          </div>
-
-          <div class="activity-mobile top-gap">
+          <div class="top-gap">
             <el-empty v-if="activities.length === 0" description="暂无实时活动" />
             <div v-else class="activity-cards">
               <div class="activity-card" v-for="item in activities" :key="item.sessionId || `${item.userName}-${item.deviceName}-${item.lastActivityAt}`">
@@ -1174,13 +1132,9 @@ if (authToken.value) {
   grid-column: span 2;
 }
 
-.activity-mobile {
-  display: none;
-}
-
 .activity-cards {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -1208,13 +1162,14 @@ if (authToken.value) {
   .span-2 {
     grid-column: span 1;
   }
-
-  .activity-desktop {
-    display: none;
+  .activity-cards {
+    grid-template-columns: 1fr;
   }
+}
 
-  .activity-mobile {
-    display: block;
+@media (min-width: 761px) and (max-width: 1180px) {
+  .activity-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>
