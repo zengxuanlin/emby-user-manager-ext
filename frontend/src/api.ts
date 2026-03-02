@@ -199,9 +199,25 @@ export function createAdminClient(settings: AdminSettings) {
       });
     },
     listWebhookEmailNotifications(q = "", limit = 100) {
-      return http.get<{ records: WebhookEmailNotificationItem[] }>(
+      return http.get<{
+        records: WebhookEmailNotificationItem[];
+        total: number;
+        page: number;
+        pageSize: number;
+      }>(
         "/admin/webhook/email-notifications",
-        { params: { q, limit } },
+        { params: { q, page: 1, pageSize: limit } },
+      );
+    },
+    listWebhookEmailNotificationsPaged(q = "", page = 1, pageSize = 20) {
+      return http.get<{
+        records: WebhookEmailNotificationItem[];
+        total: number;
+        page: number;
+        pageSize: number;
+      }>(
+        "/admin/webhook/email-notifications",
+        { params: { q, page, pageSize } },
       );
     },
     manualRecharge(payload: { embyUserId: string; amount: number; months: number; note?: string }) {

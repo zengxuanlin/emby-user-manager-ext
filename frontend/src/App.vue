@@ -232,9 +232,9 @@
             <el-input
               v-model="webhookNotifyQuery"
               placeholder="搜索收件邮箱/事件类型/状态/用户名"
-              @keyup.enter="fetchWebhookNotifyRecords"
+              @keyup.enter="searchWebhookNotifyRecords"
             />
-            <el-button type="primary" @click="fetchWebhookNotifyRecords" :loading="loading.webhookNotifyList">
+            <el-button type="primary" @click="searchWebhookNotifyRecords" :loading="loading.webhookNotifyList">
               刷新记录
             </el-button>
           </div>
@@ -255,7 +255,7 @@
             <el-table-column label="发送状态" min-width="100">
               <template #default="{ row }">
                 <el-tag :type="row.status === 'SENT' ? 'success' : row.status === 'FAILED' ? 'danger' : 'info'">
-                  {{ row.status }}
+                  {{ formatWebhookSendStatus(row.status) }}
                 </el-tag>
               </template>
             </el-table-column>
@@ -270,6 +270,18 @@
               </template>
             </el-table-column>
           </el-table>
+          <div class="top-gap row">
+            <el-pagination
+              v-model:current-page="webhookNotifyPage"
+              v-model:page-size="webhookNotifyPageSize"
+              background
+              layout="total, sizes, prev, pager, next, jumper"
+              :total="webhookNotifyTotal"
+              :page-sizes="[10, 20, 50, 100]"
+              @current-change="fetchWebhookNotifyRecords"
+              @size-change="handleWebhookPageSizeChange"
+            />
+          </div>
         </el-tab-pane>
 
         <el-tab-pane label="任务与系统" name="jobs">
@@ -546,6 +558,9 @@ const rechargeRecordQuery = ref("");
 const webhookNotifyRecords = ref<WebhookEmailNotificationItem[]>([]);
 const webhookNotifyQuery = ref("");
 const webhookReceiveUrl = `${window.location.origin}/api/webhooks/emby`;
+const webhookNotifyPage = ref(1);
+const webhookNotifyPageSize = ref(20);
+const webhookNotifyTotal = ref(0);
 const createDialogVisible = ref(false);
 const passwordDialogVisible = ref(false);
 const policyDialogVisible = ref(false);
@@ -718,6 +733,22 @@ function formatMembershipStatus(status?: UserListItem["membershipStatus"]): stri
     return "已到期";
   }
   return "未知";
+}
+
+function formatWebhookSendStatus(status: string): string {
+  if (status === "SENT") {
+    return "发送成功";
+  }
+  if (status === "FAILED") {
+    return "发送失败";
+  }
+  if (status === "SKIPPED") {
+    return "已跳过";
+  }
+  if (status === "PENDING") {
+    return "待处理";
+  }
+  return status || "未知";
 }
 
 function getSimpleExpireCron(): string {
@@ -906,13 +937,30 @@ async function fetchRechargeRecords() {
 async function fetchWebhookNotifyRecords() {
   loading.webhookNotifyList = true;
   try {
-    const { data } = await client().listWebhookEmailNotifications(webhookNotifyQuery.value.trim(), 200);
+    const { data } = await client().listWebhookEmailNotificationsPaged(
+      webhookNotifyQuery.value.trim(),
+      webhookNotifyPage.value,
+      webhookNotifyPageSize.value,
+    );
     webhookNotifyRecords.value = data.records;
+    webhookNotifyTotal.value = data.total;
+    webhookNotifyPage.value = data.page;
+    webhookNotifyPageSize.value = data.pageSize;
   } catch (error: any) {
     ElMessage.error(error?.response?.data?.message || "查询Webhook邮件通知失败");
   } finally {
     loading.webhookNotifyList = false;
   }
+}
+
+function searchWebhookNotifyRecords() {
+  webhookNotifyPage.value = 1;
+  fetchWebhookNotifyRecords();
+}
+
+function handleWebhookPageSizeChange() {
+  webhookNotifyPage.value = 1;
+  fetchWebhookNotifyRecords();
 }
 
 async function copyWebhookReceiveUrl() {

@@ -776,37 +776,46 @@ app.get("/admin/recharges", requireAdmin, async (req, res) => {
 
 app.get("/admin/webhook/email-notifications", requireAdmin, async (req, res) => {
   const q = String(req.query.q ?? "").trim();
-  const limitRaw = Number(req.query.limit ?? 100);
-  const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 500) : 100;
+  const pageRaw = Number(req.query.page ?? 1);
+  const pageSizeRaw = Number(req.query.pageSize ?? req.query.limit ?? 20);
+  const page = Number.isFinite(pageRaw) ? Math.max(Math.trunc(pageRaw), 1) : 1;
+  const pageSize = Number.isFinite(pageSizeRaw) ? Math.min(Math.max(Math.trunc(pageSizeRaw), 1), 200) : 20;
+  const skip = (page - 1) * pageSize;
 
-  const records = await prisma.emailNotification.findMany({
-    where: q
-      ? {
-          OR: [
-            { recipient: { contains: q, mode: "insensitive" } },
-            { eventType: { contains: q, mode: "insensitive" } },
-            { status: { contains: q, mode: "insensitive" } },
-            { failReason: { contains: q, mode: "insensitive" } },
-            { user: { embyUserId: { contains: q, mode: "insensitive" } } },
-            { user: { embyUsername: { contains: q, mode: "insensitive" } } },
-          ],
-        }
-      : undefined,
-    include: {
-      user: {
-        select: {
-          id: true,
-          embyUserId: true,
-          embyUsername: true,
-          email: true,
+  const where = q
+    ? {
+        OR: [
+          { recipient: { contains: q, mode: "insensitive" as const } },
+          { eventType: { contains: q, mode: "insensitive" as const } },
+          { status: { contains: q, mode: "insensitive" as const } },
+          { failReason: { contains: q, mode: "insensitive" as const } },
+          { user: { embyUserId: { contains: q, mode: "insensitive" as const } } },
+          { user: { embyUsername: { contains: q, mode: "insensitive" as const } } },
+        ],
+      }
+    : undefined;
+
+  const [records, total] = await prisma.$transaction([
+    prisma.emailNotification.findMany({
+      where,
+      include: {
+        user: {
+          select: {
+            id: true,
+            embyUserId: true,
+            embyUsername: true,
+            email: true,
+          },
         },
       },
-    },
-    orderBy: { createdAt: "desc" },
-    take: limit,
-  });
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: pageSize,
+    }),
+    prisma.emailNotification.count({ where }),
+  ]);
 
-  res.json({ records });
+  res.json({ records, total, page, pageSize });
 });
 
 app.get("/admin/memberships/:embyUserId", requireAdmin, async (req, res) => {
