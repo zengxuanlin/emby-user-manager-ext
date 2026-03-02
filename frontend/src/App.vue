@@ -41,7 +41,7 @@
                 <div class="activity-title">
                   <strong>{{ item.userName || "未知账号" }}</strong>
                   <el-tag size="small" :type="item.playbackState === 'PLAYING' ? 'success' : item.playbackState === 'PAUSED' ? 'warning' : 'info'">
-                    {{ item.playbackState }}
+                    {{ formatActivityState(item.playbackState) }}
                   </el-tag>
                 </div>
                 <div>设备：{{ item.deviceName || "-" }}</div>
@@ -83,7 +83,7 @@
             <el-table-column label="Emby状态" min-width="120">
               <template #default="{ row }">
                 <el-tag :type="row.embyDisabled ? 'danger' : 'success'">
-                  {{ row.embyDisabled ? "DISABLED" : "ENABLED" }}
+                  {{ row.embyDisabled ? "禁用" : "启用" }}
                 </el-tag>
               </template>
             </el-table-column>
@@ -105,7 +105,7 @@
             <el-table-column label="状态" min-width="120">
               <template #default="{ row }">
                 <el-tag :type="row.membershipStatus === 'ACTIVE' ? 'success' : 'info'">
-                  {{ row.membershipStatus || "N/A" }}
+                  {{ formatMembershipStatus(row.membershipStatus) }}
                 </el-tag>
               </template>
             </el-table-column>
@@ -698,6 +698,26 @@ function formatPlaybackProgress(positionTicks: number | null, runtimeTicks: numb
   }
   const ratio = Math.max(0, Math.min(100, (positionTicks / runtimeTicks) * 100));
   return `${ratio.toFixed(1)}%`;
+}
+
+function formatActivityState(state: EmbyActivityItem["playbackState"]): string {
+  if (state === "PLAYING") {
+    return "播放中";
+  }
+  if (state === "PAUSED") {
+    return "已暂停";
+  }
+  return "空闲";
+}
+
+function formatMembershipStatus(status?: UserListItem["membershipStatus"]): string {
+  if (status === "ACTIVE") {
+    return "有效";
+  }
+  if (status === "EXPIRED") {
+    return "已到期";
+  }
+  return "未知";
 }
 
 function getSimpleExpireCron(): string {
