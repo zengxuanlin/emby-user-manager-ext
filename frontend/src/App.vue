@@ -221,6 +221,57 @@
           </div>
         </el-tab-pane>
 
+        <el-tab-pane label="Webhook通知列表" name="webhook-notify">
+          <el-alert type="info" :closable="false" show-icon>
+            <template #title>
+              <span>Webhook 接收地址：<code>{{ webhookReceiveUrl }}</code></span>
+            </template>
+          </el-alert>
+          <div class="row top-gap">
+            <el-button @click="copyWebhookReceiveUrl">复制地址</el-button>
+            <el-input
+              v-model="webhookNotifyQuery"
+              placeholder="搜索收件邮箱/事件类型/状态/用户名"
+              @keyup.enter="fetchWebhookNotifyRecords"
+            />
+            <el-button type="primary" @click="fetchWebhookNotifyRecords" :loading="loading.webhookNotifyList">
+              刷新记录
+            </el-button>
+          </div>
+          <el-table :data="webhookNotifyRecords" stripe class="top-gap">
+            <el-table-column prop="createdAt" label="入库时间" min-width="180">
+              <template #default="{ row }">
+                {{ formatToChinaTime(row.createdAt) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="关联用户" min-width="210">
+              <template #default="{ row }">
+                {{ row.user?.embyUsername ? `${row.user.embyUsername} (${row.user.embyUserId})` : "-" }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="recipient" label="收件人" min-width="200" />
+            <el-table-column prop="eventType" label="事件类型" min-width="220" />
+            <el-table-column prop="subject" label="主题" min-width="220" />
+            <el-table-column label="发送状态" min-width="100">
+              <template #default="{ row }">
+                <el-tag :type="row.status === 'SENT' ? 'success' : row.status === 'FAILED' ? 'danger' : 'info'">
+                  {{ row.status }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="失败原因" min-width="320">
+              <template #default="{ row }">
+                {{ row.failReason || "-" }}
+              </template>
+            </el-table-column>
+            <el-table-column label="发送时间" min-width="180">
+              <template #default="{ row }">
+                {{ formatToChinaTime(row.dispatchedAt) }}
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+
         <el-tab-pane label="任务与系统" name="jobs">
           <div class="grid cols-2">
             <div class="row">
@@ -469,6 +520,7 @@ import {
   type NotificationSettings,
   type RechargeRecordItem,
   type UserListItem,
+  type WebhookEmailNotificationItem,
 } from "./api";
 
 const authToken = ref(localStorage.getItem("emby_auth_token") || "");
@@ -491,6 +543,9 @@ const notifyResult = ref("尚未保存");
 const expireJobCronResult = ref("尚未保存");
 const rechargeRecords = ref<RechargeRecordItem[]>([]);
 const rechargeRecordQuery = ref("");
+const webhookNotifyRecords = ref<WebhookEmailNotificationItem[]>([]);
+const webhookNotifyQuery = ref("");
+const webhookReceiveUrl = `${window.location.origin}/api/webhooks/emby`;
 const createDialogVisible = ref(false);
 const passwordDialogVisible = ref(false);
 const policyDialogVisible = ref(false);
@@ -598,6 +653,7 @@ const loading = reactive({
   recharge: false,
   expiry: false,
   rechargeList: false,
+  webhookNotifyList: false,
   membership: false,
   job: false,
   syncUsers: false,
@@ -776,6 +832,7 @@ async function submitLogin() {
       loadNotificationSettings(),
       loadExpireJobCronSettings(),
       fetchRechargeRecords(),
+      fetchWebhookNotifyRecords(),
     ]);
   } catch (error: any) {
     ElMessage.error(error?.response?.data?.message || "登录失败");
@@ -823,6 +880,27 @@ async function fetchRechargeRecords() {
     ElMessage.error(error?.response?.data?.message || "查询充值记录失败");
   } finally {
     loading.rechargeList = false;
+  }
+}
+
+async function fetchWebhookNotifyRecords() {
+  loading.webhookNotifyList = true;
+  try {
+    const { data } = await client().listWebhookEmailNotifications(webhookNotifyQuery.value.trim(), 200);
+    webhookNotifyRecords.value = data.records;
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.message || "查询Webhook邮件通知失败");
+  } finally {
+    loading.webhookNotifyList = false;
+  }
+}
+
+async function copyWebhookReceiveUrl() {
+  try {
+    await navigator.clipboard.writeText(webhookReceiveUrl);
+    ElMessage.success("Webhook 地址已复制");
+  } catch {
+    ElMessage.error("复制失败，请手动复制");
   }
 }
 
@@ -1118,6 +1196,7 @@ if (authToken.value) {
   loadNotificationSettings();
   loadExpireJobCronSettings();
   fetchRechargeRecords();
+  fetchWebhookNotifyRecords();
 }
 </script>
 

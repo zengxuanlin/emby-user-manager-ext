@@ -774,6 +774,41 @@ app.get("/admin/recharges", requireAdmin, async (req, res) => {
   res.json({ records });
 });
 
+app.get("/admin/webhook/email-notifications", requireAdmin, async (req, res) => {
+  const q = String(req.query.q ?? "").trim();
+  const limitRaw = Number(req.query.limit ?? 100);
+  const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 500) : 100;
+
+  const records = await prisma.emailNotification.findMany({
+    where: q
+      ? {
+          OR: [
+            { recipient: { contains: q, mode: "insensitive" } },
+            { eventType: { contains: q, mode: "insensitive" } },
+            { status: { contains: q, mode: "insensitive" } },
+            { failReason: { contains: q, mode: "insensitive" } },
+            { user: { embyUserId: { contains: q, mode: "insensitive" } } },
+            { user: { embyUsername: { contains: q, mode: "insensitive" } } },
+          ],
+        }
+      : undefined,
+    include: {
+      user: {
+        select: {
+          id: true,
+          embyUserId: true,
+          embyUsername: true,
+          email: true,
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
+
+  res.json({ records });
+});
+
 app.get("/admin/memberships/:embyUserId", requireAdmin, async (req, res) => {
   const embyUserId = asSingle(req.params.embyUserId);
   const user = await prisma.appUser.findUnique({

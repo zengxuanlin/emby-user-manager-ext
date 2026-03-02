@@ -82,6 +82,25 @@ export interface NotificationSettings {
   ingestionPushEnabled: boolean;
 }
 
+export interface WebhookEmailNotificationItem {
+  id: string;
+  userId: string | null;
+  eventType: string;
+  recipient: string;
+  subject: string;
+  body: string;
+  status: string;
+  failReason: string | null;
+  createdAt: string;
+  dispatchedAt: string | null;
+  user?: {
+    id: string;
+    embyUserId: string;
+    embyUsername: string;
+    email?: string | null;
+  } | null;
+}
+
 export interface ExpireJobSettings {
   expireJobCron: string;
 }
@@ -178,6 +197,12 @@ export function createAdminClient(settings: AdminSettings) {
       return http.get<{ records: RechargeRecordItem[] }>("/admin/recharges", {
         params: { q, limit },
       });
+    },
+    listWebhookEmailNotifications(q = "", limit = 100) {
+      return http.get<{ records: WebhookEmailNotificationItem[] }>(
+        "/admin/webhook/email-notifications",
+        { params: { q, limit } },
+      );
     },
     manualRecharge(payload: { embyUserId: string; amount: number; months: number; note?: string }) {
       return http.post("/admin/recharges/manual", payload);
