@@ -33,6 +33,8 @@ interface EmbySessionItem {
   Client?: string;
   LastActivityDate?: string;
   NowPlayingItem?: {
+    Id?: string;
+    SeriesId?: string;
     Name?: string;
     SeriesName?: string;
     Type?: string;
@@ -107,6 +109,8 @@ export interface EmbyRealtimeActivity {
   positionTicks: number | null;
   runtimeTicks: number | null;
   lastActivityAt: string | null;
+  itemId: string | null;
+  primaryImageItemId: string | null;
 }
 
 export async function listEmbyUsers(): Promise<EmbyUserSummary[]> {
@@ -155,6 +159,8 @@ export async function listEmbyRealtimeActivities(): Promise<EmbyRealtimeActivity
         : null,
       runtimeTicks: typeof nowPlaying?.RunTimeTicks === "number" ? nowPlaying.RunTimeTicks : null,
       lastActivityAt: session.LastActivityDate ?? null,
+      itemId: nowPlaying?.Id ?? null,
+      primaryImageItemId: nowPlaying?.SeriesId ?? nowPlaying?.Id ?? null,
     };
   });
 }

@@ -71,6 +71,8 @@ export interface EmbyActivityItem {
   positionTicks: number | null;
   runtimeTicks: number | null;
   lastActivityAt: string | null;
+  itemId: string | null;
+  primaryImageItemId: string | null;
 }
 
 export interface NotificationSettings {

@@ -220,6 +220,44 @@ app.get("/admin/emby/activities", requireAdmin, async (_req, res) => {
   res.json({ activities, fetchedAt: new Date().toISOString() });
 });
 
+app.get("/emby/images/primary/:itemId", async (req, res, next) => {
+  try {
+    const itemId = asSingle(req.params.itemId);
+    const upstreamUrl = new URL(
+      `${config.embyBaseUrl}/Items/${encodeURIComponent(itemId)}/Images/Primary`,
+    );
+    upstreamUrl.searchParams.set("api_key", config.embyApiKey);
+
+    const upstream = await fetch(upstreamUrl, {
+      headers: {
+        "X-Emby-Token": config.embyApiKey,
+      },
+    });
+
+    if (upstream.status === 404) {
+      return res.status(404).end();
+    }
+
+    if (!upstream.ok) {
+      throw new Error(`Emby image fetch failed: ${upstream.status}`);
+    }
+
+    const contentType = upstream.headers.get("content-type");
+    const cacheControl = upstream.headers.get("cache-control");
+    if (contentType) {
+      res.setHeader("Content-Type", contentType);
+    }
+    if (cacheControl) {
+      res.setHeader("Cache-Control", cacheControl);
+    }
+
+    const arrayBuffer = await upstream.arrayBuffer();
+    res.send(Buffer.from(arrayBuffer));
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.post("/admin/emby/sync-users", requireAdmin, async (req, res) => {
   const adminName = adminNameOf(req);
   const embyUsers = await listEmbyUsers();
