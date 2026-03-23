@@ -25,6 +25,7 @@ import {
   testEmbyConnection,
   updateEmbyUserPassword,
 } from "./emby.js";
+import { isTmdbConfigured, searchTmdbByKeyword } from "./tmdb.js";
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
@@ -218,6 +219,23 @@ app.get("/admin/emby/users", requireAdmin, async (req, res) => {
 app.get("/admin/emby/activities", requireAdmin, async (_req, res) => {
   const activities = (await listEmbyRealtimeActivities()).filter((item) => Boolean(item.userId));
   res.json({ activities, fetchedAt: new Date().toISOString() });
+});
+
+app.get("/admin/tmdb/search", requireAdmin, async (req, res) => {
+  if (!isTmdbConfigured()) {
+    return res.status(503).json({ message: "TMDB is not configured" });
+  }
+
+  const q = String(req.query.q ?? "").trim();
+  const pageRaw = Number(req.query.page ?? 1);
+  const page = Number.isFinite(pageRaw) ? Math.max(Math.trunc(pageRaw), 1) : 1;
+
+  if (!q) {
+    return res.status(400).json({ message: "search keyword is required" });
+  }
+
+  const result = await searchTmdbByKeyword(q, page);
+  res.json(result);
 });
 
 app.get("/emby/images/primary/:itemId", async (req, res, next) => {

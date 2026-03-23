@@ -10,6 +10,11 @@ function required(name: string): string {
   return value;
 }
 
+function optional(name: string): string | null {
+  const value = process.env[name]?.trim();
+  return value ? value : null;
+}
+
 export const config = {
   port: Number(process.env.PORT ?? 3000),
   adminUsername: required("ADMIN_USERNAME"),
@@ -17,4 +22,6 @@ export const config = {
   authSecret: required("AUTH_SECRET"),
   embyBaseUrl: required("EMBY_BASE_URL").replace(/\/+$/, ""),
   embyApiKey: required("EMBY_API_KEY"),
+  tmdbBaseUrl: optional("TMDB_BASE_URL")?.replace(/\/+$/, "") ?? null,
+  tmdbApiKey: optional("TMDB_API_KEY"),
 };

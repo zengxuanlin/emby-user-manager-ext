@@ -107,6 +107,28 @@ export interface ExpireJobSettings {
   expireJobCron: string;
 }
 
+export interface TmdbSearchItem {
+  id: number;
+  mediaType: "movie" | "tv";
+  title: string;
+  originalTitle: string | null;
+  overview: string | null;
+  posterUrl: string | null;
+  backdropUrl: string | null;
+  releaseDate: string | null;
+  rating: number | null;
+  voteCount: number | null;
+  popularity: number | null;
+  language: string | null;
+  genres: string[];
+  runtime: number | null;
+  seasonCount: number | null;
+  episodeCount: number | null;
+  status: string | null;
+  tagline: string | null;
+  imdbId: string | null;
+}
+
 export function login(baseUrl: string, payload: { username: string; password: string }) {
   const http = axios.create({
     baseURL: baseUrl,
@@ -242,6 +264,16 @@ export function createAdminClient(settings: AdminSettings) {
         "/admin/system/expire-job-settings",
         payload,
       );
+    },
+    searchTmdb(q: string, page = 1) {
+      return http.get<{
+        page: number;
+        totalPages: number;
+        totalResults: number;
+        results: TmdbSearchItem[];
+      }>("/admin/tmdb/search", {
+        params: { q, page },
+      });
     },
   };
 }

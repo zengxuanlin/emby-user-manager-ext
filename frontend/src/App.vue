@@ -249,6 +249,79 @@
           <pre class="result">{{ membershipResult }}</pre>
         </el-tab-pane>
 
+        <el-tab-pane label="TMDB搜索" name="tmdb">
+          <div class="row">
+            <el-input
+              v-model="tmdbQuery"
+              placeholder="输入电影或剧集关键字"
+              @keyup.enter="searchTmdb"
+            />
+            <el-button type="primary" @click="searchTmdb" :loading="loading.tmdb">搜索</el-button>
+            <span>{{ tmdbSummary }}</span>
+          </div>
+
+          <div class="top-gap">
+            <el-empty v-if="!tmdbHasSearched && tmdbResults.length === 0" description="输入关键字后开始搜索 TMDB" />
+            <el-empty v-else-if="tmdbHasSearched && tmdbResults.length === 0" description="没有找到匹配的 TMDB 结果" />
+            <div v-else class="tmdb-grid">
+              <article v-for="item in tmdbResults" :key="`${item.mediaType}-${item.id}`" class="tmdb-card">
+                <div class="tmdb-poster-wrap">
+                  <img
+                    v-if="item.posterUrl"
+                    :src="item.posterUrl"
+                    :alt="item.title"
+                    class="tmdb-poster"
+                  />
+                  <div v-else class="tmdb-poster-fallback">
+                    {{ item.mediaType === "movie" ? "电影" : "剧集" }}
+                  </div>
+                </div>
+
+                <div class="tmdb-body">
+                  <div class="activity-title">
+                    <strong>{{ item.title }}</strong>
+                    <el-tag size="small" :type="item.mediaType === 'movie' ? 'success' : 'warning'">
+                      {{ item.mediaType === "movie" ? "电影" : "剧集" }}
+                    </el-tag>
+                  </div>
+
+                  <div class="tmdb-actions">
+                    <el-button size="small" @click="copyTmdbId(item.id)">复制 TMDB ID</el-button>
+                    <el-button
+                      size="small"
+                      type="primary"
+                      plain
+                      tag="a"
+                      :href="getTmdbPageUrl(item)"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      打开 TMDB 页面
+                    </el-button>
+                  </div>
+
+                  <div class="tmdb-meta">TMDB ID：{{ item.id }}</div>
+                  <div class="tmdb-meta" v-if="item.originalTitle && item.originalTitle !== item.title">
+                    原始标题：{{ item.originalTitle }}
+                  </div>
+                  <div class="tmdb-meta">上映/首播：{{ item.releaseDate || "-" }}</div>
+                  <div class="tmdb-meta">评分：{{ formatTmdbRating(item.rating, item.voteCount) }}</div>
+                  <div class="tmdb-meta">语言：{{ item.language || "-" }}</div>
+                  <div class="tmdb-meta">状态：{{ item.status || "-" }}</div>
+                  <div class="tmdb-meta">类型标签：{{ item.genres.length ? item.genres.join(" / ") : "-" }}</div>
+                  <div class="tmdb-meta" v-if="item.mediaType === 'movie'">片长：{{ formatRuntime(item.runtime) }}</div>
+                  <div class="tmdb-meta" v-else>
+                    剧集信息：{{ formatSeasonEpisode(item.seasonCount, item.episodeCount) }}
+                  </div>
+                  <div class="tmdb-meta">IMDb：{{ item.imdbId || "-" }}</div>
+                  <div class="tmdb-tagline" v-if="item.tagline">{{ item.tagline }}</div>
+                  <p class="tmdb-overview">{{ item.overview || "暂无剧情简介" }}</p>
+                </div>
+              </article>
+            </div>
+          </div>
+        </el-tab-pane>
+
         <el-tab-pane label="通知设置" name="notification">
           <div class="grid cols-2">
             <el-input v-model="notificationForm.senderEmail" placeholder="发送人邮箱地址" />
@@ -592,6 +665,7 @@ import {
   type EmbyUserPolicy,
   type NotificationSettings,
   type RechargeRecordItem,
+  type TmdbSearchItem,
   type UserListItem,
   type WebhookEmailNotificationItem,
 } from "./api";
@@ -610,6 +684,10 @@ const activities = ref<EmbyActivityItem[]>([]);
 const activitiesFetchedAt = ref<string | null>(null);
 const membershipQueryId = ref("");
 const membershipResult = ref("尚未查询");
+const tmdbQuery = ref("");
+const tmdbSummary = ref("尚未搜索");
+const tmdbHasSearched = ref(false);
+const tmdbResults = ref<TmdbSearchItem[]>([]);
 const jobResult = ref("尚未执行");
 const syncResult = ref("尚未同步");
 const notifyResult = ref("尚未保存");
@@ -731,6 +809,7 @@ const loading = reactive({
   rechargeList: false,
   webhookNotifyList: false,
   membership: false,
+  tmdb: false,
   job: false,
   syncUsers: false,
   createUser: false,
@@ -825,6 +904,44 @@ function formatWebhookSendStatus(status: string): string {
     return "待处理";
   }
   return status || "未知";
+}
+
+function formatTmdbRating(rating: number | null, voteCount: number | null): string {
+  if (rating == null) {
+    return "-";
+  }
+  if (voteCount == null) {
+    return rating.toFixed(1);
+  }
+  return `${rating.toFixed(1)} / ${voteCount}票`;
+}
+
+function formatRuntime(runtime: number | null): string {
+  if (!runtime || runtime <= 0) {
+    return "-";
+  }
+  return `${runtime} 分钟`;
+}
+
+function formatSeasonEpisode(seasonCount: number | null, episodeCount: number | null): string {
+  const seasonText = seasonCount != null ? `${seasonCount}季` : "-";
+  const episodeText = episodeCount != null ? `${episodeCount}集` : "-";
+  return `${seasonText} / ${episodeText}`;
+}
+
+function getTmdbPageUrl(item: TmdbSearchItem): string {
+  return item.mediaType === "movie"
+    ? `https://www.themoviedb.org/movie/${item.id}`
+    : `https://www.themoviedb.org/tv/${item.id}`;
+}
+
+async function copyTmdbId(id: number) {
+  try {
+    await navigator.clipboard.writeText(String(id));
+    ElMessage.success(`TMDB ID ${id} 已复制`);
+  } catch {
+    ElMessage.error("复制 TMDB ID 失败");
+  }
 }
 
 function getSimpleExpireCron(): string {
@@ -1057,6 +1174,29 @@ async function fetchMembership() {
     ElMessage.error(error?.response?.data?.message || "查询失败");
   } finally {
     loading.membership = false;
+  }
+}
+
+async function searchTmdb() {
+  const keyword = tmdbQuery.value.trim();
+  if (!keyword) {
+    ElMessage.warning("请输入 TMDB 搜索关键字");
+    return;
+  }
+
+  loading.tmdb = true;
+  try {
+    const { data } = await client().searchTmdb(keyword, 1);
+    tmdbHasSearched.value = true;
+    tmdbResults.value = data.results;
+    tmdbSummary.value = `共 ${data.totalResults} 条，当前展示 ${data.results.length} 条`;
+  } catch (error: any) {
+    tmdbHasSearched.value = true;
+    tmdbResults.value = [];
+    tmdbSummary.value = error?.response?.data?.message || "TMDB 搜索失败";
+    ElMessage.error(error?.response?.data?.message || "TMDB 搜索失败");
+  } finally {
+    loading.tmdb = false;
   }
 }
 
@@ -1389,6 +1529,75 @@ if (authToken.value) {
   gap: 14px;
 }
 
+.tmdb-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.tmdb-card {
+  border: 1px solid #ebeef5;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #fff;
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  min-height: 270px;
+}
+
+.tmdb-poster-wrap {
+  background: linear-gradient(135deg, #e2e8f0, #f8fafc);
+  min-height: 100%;
+}
+
+.tmdb-poster {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.tmdb-poster-fallback {
+  height: 100%;
+  min-height: 270px;
+  display: grid;
+  place-items: center;
+  color: #475569;
+  font-size: 16px;
+}
+
+.tmdb-body {
+  padding: 16px;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.tmdb-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tmdb-meta {
+  color: #606266;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.tmdb-tagline {
+  color: #0f766e;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.tmdb-overview {
+  margin: 0;
+  color: #303133;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
 .playing-card {
   border: 1px solid #ebeef5;
   border-radius: 14px;
@@ -1471,13 +1680,26 @@ if (authToken.value) {
   }
 
   .playing-cards,
+  .tmdb-grid,
   .activity-cards {
     grid-template-columns: 1fr;
+  }
+
+  .tmdb-card {
+    grid-template-columns: 1fr;
+  }
+
+  .tmdb-poster-wrap {
+    aspect-ratio: 2 / 3;
   }
 }
 
 @media (min-width: 761px) and (max-width: 1180px) {
   .playing-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .tmdb-grid {
     grid-template-columns: 1fr;
   }
 
