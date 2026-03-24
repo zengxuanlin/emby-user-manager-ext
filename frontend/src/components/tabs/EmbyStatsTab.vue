@@ -34,7 +34,7 @@
                 <el-tag size="small" type="success">{{ formatMediaType(item.type) }}</el-tag>
               </div>
               <div class="emby-stats-meta">入库时间：{{ formatToChinaTime(item.dateCreated) }}</div>
-              <div class="emby-stats-meta">上映日期：{{ item.premiereDate || "-" }}</div>
+              <div class="emby-stats-meta">上映日期：{{ formatToChinaTime(item.premiereDate) }}</div>
               <div class="emby-stats-meta">年份：{{ item.productionYear ?? "-" }}</div>
               <div class="emby-stats-meta">评分：{{ formatRating(item.communityRating) }}</div>
               <div class="emby-stats-meta">时长：{{ formatRuntimeTicks(item.runtimeTicks) }}</div>
@@ -73,7 +73,7 @@
               </div>
               <div class="emby-stats-meta">播放次数：{{ item.playCount ?? 0 }}</div>
               <div class="emby-stats-meta">最近播放：{{ formatToChinaTime(item.lastPlayedDate) }}</div>
-              <div class="emby-stats-meta">上映日期：{{ item.premiereDate || "-" }}</div>
+              <div class="emby-stats-meta">上映日期：{{ formatToChinaTime(item.premiereDate) }}</div>
               <div class="emby-stats-meta">年份：{{ item.productionYear ?? "-" }}</div>
               <div class="emby-stats-meta">评分：{{ formatRating(item.communityRating) }}</div>
               <div class="emby-stats-meta">时长：{{ formatRuntimeTicks(item.runtimeTicks) }}</div>
