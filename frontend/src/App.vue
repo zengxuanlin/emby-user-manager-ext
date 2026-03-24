@@ -29,450 +29,122 @@
     <section class="card">
       <el-tabs v-model="tab">
         <el-tab-pane label="实时活动" name="activity">
-          <div class="row">
-            <el-button type="primary" @click="fetchActivities" :loading="loading.activities">刷新活动</el-button>
-            <span>最近刷新：{{ formatToChinaTime(activitiesFetchedAt) }}</span>
-          </div>
-
-          <div class="top-gap">
-            <el-empty v-if="activities.length === 0" description="暂无实时活动" />
-            <div v-else class="activity-sections">
-              <section class="activity-section">
-                <div class="activity-section-head">
-                  <div>
-                    <h3>正在播放</h3>
-                    <p>当前正在观看的会话</p>
-                  </div>
-                  <el-tag type="success" effect="plain">{{ playingActivities.length }}</el-tag>
-                </div>
-
-                <el-empty v-if="playingActivities.length === 0" description="当前没有正在播放的内容" />
-                <div v-else class="playing-cards">
-                  <article
-                    v-for="item in playingActivities"
-                    :key="item.sessionId || `${item.userName}-${item.deviceName}-${item.lastActivityAt}`"
-                    class="playing-card"
-                  >
-                    <div class="playing-poster-wrap">
-                      <img
-                        v-if="getActivityImageUrl(item)"
-                        :src="getActivityImageUrl(item)"
-                        :alt="item.itemName || '正在播放封面'"
-                        class="playing-poster"
-                      />
-                      <div v-else class="playing-poster-fallback">
-                        <span>{{ item.itemType || "媒体" }}</span>
-                      </div>
-                      <el-tag class="playing-state-tag" size="small" type="success">播放中</el-tag>
-                    </div>
-
-                    <div class="playing-body">
-                      <div class="activity-title">
-                        <strong>{{ item.itemName || "未知内容" }}</strong>
-                      </div>
-                      <div class="activity-meta">账号：{{ item.userName || "未知账号" }}</div>
-                      <div class="activity-meta">设备：{{ item.deviceName || "-" }}</div>
-                      <div class="activity-meta">客户端：{{ item.client || "-" }}</div>
-                      <div class="activity-meta">类型：{{ item.itemType || "-" }}</div>
-                      <div class="activity-meta">进度：{{ formatPlaybackProgress(item.positionTicks, item.runtimeTicks) }}</div>
-                      <div class="activity-meta">最近活动：{{ formatToChinaTime(item.lastActivityAt) }}</div>
-                    </div>
-                  </article>
-                </div>
-              </section>
-
-              <section class="activity-section">
-                <div class="activity-section-head">
-                  <div>
-                    <h3>活动动态</h3>
-                    <p>暂停、空闲或最近有活动的会话</p>
-                  </div>
-                  <el-tag type="info" effect="plain">{{ nonPlayingActivities.length }}</el-tag>
-                </div>
-
-                <el-empty v-if="nonPlayingActivities.length === 0" description="暂无其他活动动态" />
-                <div v-else class="activity-cards">
-                  <div
-                    class="activity-card"
-                    v-for="item in nonPlayingActivities"
-                    :key="item.sessionId || `${item.userName}-${item.deviceName}-${item.lastActivityAt}`"
-                  >
-                    <div class="activity-title">
-                      <strong>{{ item.userName || "未知账号" }}</strong>
-                      <el-tag size="small" :type="item.playbackState === 'PAUSED' ? 'warning' : 'info'">
-                        {{ formatActivityState(item.playbackState) }}
-                      </el-tag>
-                    </div>
-                    <div class="activity-meta">设备：{{ item.deviceName || "-" }}</div>
-                    <div class="activity-meta">客户端：{{ item.client || "-" }}</div>
-                    <div class="activity-meta">内容：{{ item.itemName || "-" }}</div>
-                    <div class="activity-meta">进度：{{ formatPlaybackProgress(item.positionTicks, item.runtimeTicks) }}</div>
-                    <div class="activity-meta">最近活动：{{ formatToChinaTime(item.lastActivityAt) }}</div>
-                  </div>
-                </div>
-              </section>
-            </div>
-          </div>
+          <ActivityTab
+            :activities="activities"
+            :fetched-at="activitiesFetchedAt"
+            :loading="loadingActivities"
+            :format-to-china-time="formatToChinaTime"
+            :format-playback-progress="formatPlaybackProgress"
+            :format-activity-state="formatActivityState"
+            :get-activity-image-url="getActivityImageUrl"
+            @refresh="fetchActivities"
+          />
         </el-tab-pane>
 
         <el-tab-pane label="用户管理" name="users">
-          <el-alert
-            title="支持直接新增 Emby 用户；已有用户会从 Emby 拉取，不需要手动输入 Emby User ID。"
-            type="info"
-            show-icon
-            :closable="false"
+          <UsersTab
+            :search="search"
+            :users="users"
+            :sync-result="syncResult"
+            :loading-users="loadingUsers"
+            :loading-sync-users="loadingSyncUsers"
+            :format-to-china-time="formatToChinaTime"
+            :format-membership-status="formatMembershipStatus"
+            @update:search="search = $event"
+            @fetch-users="fetchUsers"
+            @open-create-dialog="createDialogVisible = true"
+            @sync-users="syncUsersFromEmby"
+            @user-action="handleUserAction"
           />
-
-          <div class="row top-gap">
-            <el-input v-model="search" placeholder="搜索 Emby 用户ID/用户名" @keyup.enter="fetchUsers" />
-            <el-button type="primary" @click="createDialogVisible = true">新增 Emby 用户</el-button>
-            <el-button @click="fetchUsers" :loading="loading.users">查询</el-button>
-            <el-button type="primary" plain @click="syncUsersFromEmby" :loading="loading.syncUsers">
-              同步 Emby 用户到本地
-            </el-button>
-            <span>{{ syncResult }}</span>
-          </div>
-
-          <el-table :data="users" stripe class="top-gap">
-            <el-table-column prop="embyUserId" label="Emby ID" min-width="120" />
-            <el-table-column prop="embyUsername" label="用户名" min-width="120" />
-            <el-table-column label="创建时间" min-width="200">
-              <template #default="{ row }">
-                {{ formatToChinaTime(row.embyCreatedAt) }}
-              </template>
-            </el-table-column>
-            <el-table-column label="Emby状态" min-width="120">
-              <template #default="{ row }">
-                <el-tag :type="row.embyDisabled ? 'danger' : 'success'">
-                  {{ row.embyDisabled ? "禁用" : "启用" }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="本地关联" min-width="120">
-              <template #default="{ row }">
-                <el-tag :type="row.localLinked ? 'success' : 'warning'">
-                  {{ row.localLinked ? "已关联" : "未关联" }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="email" label="邮箱" min-width="180" />
-            <el-table-column label="邮箱推送" min-width="120">
-              <template #default="{ row }">
-                <el-tag :type="row.emailPushEnabled ? 'success' : 'info'">
-                  {{ row.emailPushEnabled ? "开启" : "关闭" }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="状态" min-width="120">
-              <template #default="{ row }">
-                <el-tag :type="row.membershipStatus === 'ACTIVE' ? 'success' : 'info'">
-                  {{ formatMembershipStatus(row.membershipStatus) }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="到期时间" min-width="220">
-              <template #default="{ row }">
-                {{ formatToChinaTime(row.membershipEndAt) }}
-              </template>
-            </el-table-column>
-            <el-table-column label="最近充值金额" min-width="130">
-              <template #default="{ row }">
-                {{ row.lastRechargeAmount ?? "-" }}
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" min-width="130" fixed="right">
-              <template #default="{ row }">
-                <el-dropdown @command="(command: string) => handleUserAction(command, row)">
-                  <el-button type="primary" plain>
-                    操作
-                    <el-icon class="el-icon--right"><ArrowDown /></el-icon>
-                  </el-button>
-                  <template #dropdown>
-                    <el-dropdown-menu>
-                      <el-dropdown-item command="policy">编辑权限</el-dropdown-item>
-                      <el-dropdown-item command="password">修改密码</el-dropdown-item>
-                      <el-dropdown-item command="recharge">充值</el-dropdown-item>
-                      <el-dropdown-item command="expiry">修改到期时间</el-dropdown-item>
-                      <el-dropdown-item command="delete" divided>
-                        <span style="color: #d03050;">删除用户</span>
-                      </el-dropdown-item>
-                    </el-dropdown-menu>
-                  </template>
-                </el-dropdown>
-              </template>
-            </el-table-column>
-          </el-table>
         </el-tab-pane>
 
         <el-tab-pane label="充值记录" name="recharge-records">
-          <div class="row">
-            <el-input
-              v-model="rechargeRecordQuery"
-              placeholder="搜索 Emby 用户ID/用户名/管理员"
-              @keyup.enter="fetchRechargeRecords"
-            />
-            <el-button @click="fetchRechargeRecords" :loading="loading.rechargeList">查询记录</el-button>
-          </div>
-          <el-table :data="rechargeRecords" stripe class="top-gap">
-            <el-table-column prop="createdAt" label="充值时间" min-width="180">
-              <template #default="{ row }">
-                {{ formatToChinaTime(row.createdAt) }}
-              </template>
-            </el-table-column>
-            <el-table-column label="用户" min-width="200">
-              <template #default="{ row }">
-                {{ row.user.embyUsername }} ({{ row.user.embyUserId }})
-              </template>
-            </el-table-column>
-            <el-table-column prop="adminName" label="操作管理员" min-width="120" />
-            <el-table-column prop="amount" label="充值金额" min-width="100" />
-            <el-table-column prop="months" label="月数" min-width="80" />
-            <el-table-column label="原到期" min-width="180">
-              <template #default="{ row }">
-                {{ formatToChinaTime(row.oldEndAt) }}
-              </template>
-            </el-table-column>
-            <el-table-column label="新到期" min-width="180">
-              <template #default="{ row }">
-                {{ formatToChinaTime(row.newEndAt) }}
-              </template>
-            </el-table-column>
-            <el-table-column prop="note" label="备注" min-width="180" />
-          </el-table>
+          <RechargeRecordsTab
+            :query="rechargeRecordQuery"
+            :records="rechargeRecords"
+            :loading="loadingRechargeList"
+            :format-to-china-time="formatToChinaTime"
+            @update:query="rechargeRecordQuery = $event"
+            @search="fetchRechargeRecords"
+          />
         </el-tab-pane>
 
         <el-tab-pane label="会员查询" name="membership">
-          <div class="row">
-            <el-input v-model="membershipQueryId" placeholder="输入 Emby User ID" />
-            <el-button type="primary" @click="fetchMembership" :loading="loading.membership">查询详情</el-button>
-          </div>
-          <pre class="result">{{ membershipResult }}</pre>
+          <MembershipTab
+            :query-id="membershipQueryId"
+            :result="membershipResult"
+            :loading="loadingMembership"
+            @update:query-id="membershipQueryId = $event"
+            @search="fetchMembership"
+          />
         </el-tab-pane>
 
         <el-tab-pane label="TMDB搜索" name="tmdb">
-          <div class="row">
-            <el-input
-              v-model="tmdbQuery"
-              placeholder="输入电影或剧集关键字"
-              @keyup.enter="searchTmdb"
-            />
-            <el-button type="primary" @click="searchTmdb" :loading="loading.tmdb">搜索</el-button>
-            <span>{{ tmdbSummary }}</span>
-          </div>
-
-          <div class="top-gap">
-            <el-empty v-if="!tmdbHasSearched && tmdbResults.length === 0" description="输入关键字后开始搜索 TMDB" />
-            <el-empty v-else-if="tmdbHasSearched && tmdbResults.length === 0" description="没有找到匹配的 TMDB 结果" />
-            <div v-else class="tmdb-grid">
-              <article v-for="item in tmdbResults" :key="`${item.mediaType}-${item.id}`" class="tmdb-card">
-                <div class="tmdb-poster-wrap">
-                  <img
-                    v-if="item.posterUrl"
-                    :src="item.posterUrl"
-                    :alt="item.title"
-                    class="tmdb-poster"
-                  />
-                  <div v-else class="tmdb-poster-fallback">
-                    {{ item.mediaType === "movie" ? "电影" : "剧集" }}
-                  </div>
-                </div>
-
-                <div class="tmdb-body">
-                  <div class="activity-title">
-                    <strong>{{ item.title }}</strong>
-                    <el-tag size="small" :type="item.mediaType === 'movie' ? 'success' : 'warning'">
-                      {{ item.mediaType === "movie" ? "电影" : "剧集" }}
-                    </el-tag>
-                  </div>
-
-                  <div class="tmdb-actions">
-                    <el-button size="small" @click="copyTmdbId(item.id)">复制 TMDB ID</el-button>
-                    <el-button
-                      size="small"
-                      type="primary"
-                      plain
-                      tag="a"
-                      :href="getTmdbPageUrl(item)"
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      打开 TMDB 页面
-                    </el-button>
-                  </div>
-
-                  <div class="tmdb-meta">TMDB ID：{{ item.id }}</div>
-                  <div class="tmdb-meta" v-if="item.originalTitle && item.originalTitle !== item.title">
-                    原始标题：{{ item.originalTitle }}
-                  </div>
-                  <div class="tmdb-meta">上映/首播：{{ item.releaseDate || "-" }}</div>
-                  <div class="tmdb-meta">评分：{{ formatTmdbRating(item.rating, item.voteCount) }}</div>
-                  <div class="tmdb-meta">语言：{{ item.language || "-" }}</div>
-                  <div class="tmdb-meta">状态：{{ item.status || "-" }}</div>
-                  <div class="tmdb-meta">类型标签：{{ item.genres.length ? item.genres.join(" / ") : "-" }}</div>
-                  <div class="tmdb-meta" v-if="item.mediaType === 'movie'">片长：{{ formatRuntime(item.runtime) }}</div>
-                  <div class="tmdb-meta" v-else>
-                    剧集信息：{{ formatSeasonEpisode(item.seasonCount, item.episodeCount) }}
-                  </div>
-                  <div class="tmdb-meta">IMDb：{{ item.imdbId || "-" }}</div>
-                  <div class="tmdb-tagline" v-if="item.tagline">{{ item.tagline }}</div>
-                  <p class="tmdb-overview">{{ item.overview || "暂无剧情简介" }}</p>
-                </div>
-              </article>
-            </div>
-          </div>
+          <TmdbTab
+            :query="tmdbQuery"
+            :summary="tmdbSummary"
+            :has-searched="tmdbHasSearched"
+            :results="tmdbResults"
+            :loading="loadingTmdb"
+            :format-tmdb-rating="formatTmdbRating"
+            :format-runtime="formatRuntime"
+            :format-season-episode="formatSeasonEpisode"
+            :get-tmdb-page-url="getTmdbPageUrl"
+            @update:query="tmdbQuery = $event"
+            @search="searchTmdb"
+            @copy-id="copyTmdbId"
+          />
         </el-tab-pane>
 
         <el-tab-pane label="通知设置" name="notification">
-          <div class="grid cols-2">
-            <el-input v-model="notificationForm.senderEmail" placeholder="发送人邮箱地址" />
-            <el-input
-              v-model="notificationForm.emailAuthCode"
-              type="password"
-              show-password
-              placeholder="邮箱授权码"
-            />
-            <el-input v-model="notificationForm.smtpHost" placeholder="SMTP Host（如 smtp.qq.com）" />
-            <el-input-number
-              v-model="notificationForm.smtpPort"
-              :min="1"
-              :max="65535"
-              controls-position="right"
-            />
-            <div class="row">
-              <span>SMTP 使用 SSL/TLS</span>
-              <el-switch v-model="notificationForm.smtpSecure" />
-            </div>
-            <div class="row">
-              <span>是否开启入库推送</span>
-              <el-switch v-model="notificationForm.ingestionPushEnabled" />
-            </div>
-          </div>
-          <div class="row top-gap">
-            <el-button type="primary" @click="submitNotificationSettings" :loading="loading.notifySettings">
-              保存通知设置
-            </el-button>
-            <span>{{ notifyResult }}</span>
-          </div>
+          <NotificationTab
+            :form="notificationForm"
+            :result="notifyResult"
+            :loading="loadingNotifySettings"
+            @update:form="updateNotificationForm"
+            @submit="submitNotificationSettings"
+          />
         </el-tab-pane>
 
         <el-tab-pane label="Webhook通知列表" name="webhook-notify">
-          <el-alert type="info" :closable="false" show-icon>
-            <template #title>
-              <span>Webhook 接收地址：<code>{{ webhookReceiveUrl }}</code></span>
-            </template>
-          </el-alert>
-          <div class="row top-gap">
-            <el-button @click="copyWebhookReceiveUrl">复制地址</el-button>
-            <el-input
-              v-model="webhookNotifyQuery"
-              placeholder="搜索收件邮箱/事件类型/状态/用户名"
-              @keyup.enter="searchWebhookNotifyRecords"
-            />
-            <el-button type="primary" @click="searchWebhookNotifyRecords" :loading="loading.webhookNotifyList">
-              刷新记录
-            </el-button>
-          </div>
-          <el-table :data="webhookNotifyRecords" stripe class="top-gap">
-            <el-table-column prop="createdAt" label="入库时间" min-width="180">
-              <template #default="{ row }">
-                {{ formatToChinaTime(row.createdAt) }}
-              </template>
-            </el-table-column>
-            <el-table-column label="关联用户" min-width="210">
-              <template #default="{ row }">
-                {{ row.user?.embyUsername ? `${row.user.embyUsername} (${row.user.embyUserId})` : "-" }}
-              </template>
-            </el-table-column>
-            <el-table-column prop="recipient" label="收件人" min-width="200" />
-            <el-table-column prop="eventType" label="事件类型" min-width="220" />
-            <el-table-column prop="subject" label="主题" min-width="220" />
-            <el-table-column label="发送状态" min-width="100">
-              <template #default="{ row }">
-                <el-tag :type="row.status === 'SENT' ? 'success' : row.status === 'FAILED' ? 'danger' : 'info'">
-                  {{ formatWebhookSendStatus(row.status) }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="失败原因" min-width="320">
-              <template #default="{ row }">
-                {{ row.failReason || "-" }}
-              </template>
-            </el-table-column>
-            <el-table-column label="发送时间" min-width="180">
-              <template #default="{ row }">
-                {{ formatToChinaTime(row.dispatchedAt) }}
-              </template>
-            </el-table-column>
-          </el-table>
-          <div class="top-gap row">
-            <el-pagination
-              v-model:current-page="webhookNotifyPage"
-              v-model:page-size="webhookNotifyPageSize"
-              background
-              layout="total, sizes, prev, pager, next, jumper"
-              :total="webhookNotifyTotal"
-              :page-sizes="[10, 20, 50, 100]"
-              @current-change="fetchWebhookNotifyRecords"
-              @size-change="handleWebhookPageSizeChange"
-            />
-          </div>
+          <WebhookNotifyTab
+            :webhook-receive-url="webhookReceiveUrl"
+            :query="webhookNotifyQuery"
+            :records="webhookNotifyRecords"
+            :total="webhookNotifyTotal"
+            :page="webhookNotifyPage"
+            :page-size="webhookNotifyPageSize"
+            :loading="loadingWebhookNotifyList"
+            :format-to-china-time="formatToChinaTime"
+            :format-webhook-send-status="formatWebhookSendStatus"
+            @copy-url="copyWebhookReceiveUrl"
+            @update:query="webhookNotifyQuery = $event"
+            @search="searchWebhookNotifyRecords"
+            @update:page="webhookNotifyPage = $event"
+            @update:page-size="webhookNotifyPageSize = $event"
+            @page-change="fetchWebhookNotifyRecords"
+            @page-size-change="handleWebhookPageSizeChange"
+          />
         </el-tab-pane>
 
         <el-tab-pane label="任务与系统" name="jobs">
-          <div class="grid cols-2">
-            <div class="row">
-              <span>到期任务调度模式</span>
-              <el-radio-group v-model="expireJobCronMode">
-                <el-radio-button label="simple">简易配置</el-radio-button>
-                <el-radio-button label="custom">Cron表达式</el-radio-button>
-              </el-radio-group>
-            </div>
-
-            <template v-if="expireJobCronMode === 'simple'">
-              <div class="row">
-                <span>执行周期</span>
-                <el-radio-group v-model="expireJobSimple.kind">
-                  <el-radio-button label="daily">每天</el-radio-button>
-                  <el-radio-button label="weekly">每周</el-radio-button>
-                </el-radio-group>
-              </div>
-              <div class="row">
-                <span>执行时间（小时:分钟）</span>
-                <small style="color: #909399;">小时范围 0-23，分钟范围 0-59</small>
-              </div>
-              <div class="grid cols-3">
-                <el-input-number v-model="expireJobSimple.hour" :min="0" :max="23" controls-position="right" placeholder="小时" />
-                <el-input-number
-                  v-model="expireJobSimple.minute"
-                  :min="0"
-                  :max="59"
-                  controls-position="right"
-                  placeholder="分钟"
-                />
-                <el-select v-if="expireJobSimple.kind === 'weekly'" v-model="expireJobSimple.weekday">
-                  <el-option v-for="option in weekDayOptions" :key="option.value" :label="option.label" :value="option.value" />
-                </el-select>
-              </div>
-              <div>执行预览：<code>{{ getSimpleExpireCronHumanText() }}</code></div>
-              <div>预览 Cron：<code>{{ getSimpleExpireCron() }}</code></div>
-            </template>
-
-            <template v-else>
-              <el-input v-model="expireJobCronInput" placeholder="例如: 5 2 * * *" />
-            </template>
-
-            <div class="row">
-              <el-button type="primary" @click="submitExpireJobCron" :loading="loading.jobCron">
-                保存调度配置
-              </el-button>
-              <span>{{ expireJobCronResult }}</span>
-            </div>
-          </div>
-
-          <div class="row top-gap">
-            <el-button type="danger" @click="runExpireJob" :loading="loading.job">立即执行到期任务</el-button>
-            <span>{{ jobResult }}</span>
-          </div>
+          <JobsTab
+            :cron-mode="expireJobCronMode"
+            :cron-input="expireJobCronInput"
+            :cron-result="expireJobCronResult"
+            :job-result="jobResult"
+            :simple="expireJobSimple"
+            :week-day-options="weekDayOptions"
+            :loading-cron="loadingJobCron"
+            :loading-job="loadingJob"
+            :get-simple-expire-cron="getSimpleExpireCron"
+            :get-simple-expire-cron-human-text="getSimpleExpireCronHumanText"
+            @update:cron-mode="expireJobCronMode = $event"
+            @update:cron-input="expireJobCronInput = $event"
+            @update:simple="updateExpireJobSimple"
+            @submit-cron="submitExpireJobCron"
+            @run-job="runExpireJob"
+          />
         </el-tab-pane>
       </el-tabs>
     </section>
@@ -657,18 +329,40 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { ArrowDown } from "@element-plus/icons-vue";
 import {
   createAdminClient,
   login,
-  type EmbyActivityItem,
   type EmbyUserPolicy,
-  type NotificationSettings,
-  type RechargeRecordItem,
-  type TmdbSearchItem,
   type UserListItem,
-  type WebhookEmailNotificationItem,
 } from "./api";
+import ActivityTab from "./components/tabs/ActivityTab.vue";
+import UsersTab from "./components/tabs/UsersTab.vue";
+import RechargeRecordsTab from "./components/tabs/RechargeRecordsTab.vue";
+import MembershipTab from "./components/tabs/MembershipTab.vue";
+import TmdbTab from "./components/tabs/TmdbTab.vue";
+import NotificationTab from "./components/tabs/NotificationTab.vue";
+import WebhookNotifyTab from "./components/tabs/WebhookNotifyTab.vue";
+import JobsTab from "./components/tabs/JobsTab.vue";
+import {
+  formatActivityState,
+  formatMembershipStatus,
+  formatPlaybackProgress,
+  formatRuntime,
+  formatSeasonEpisode,
+  formatTmdbRating,
+  formatToChinaTime,
+  formatWebhookSendStatus,
+  getActivityImageUrl,
+  getTmdbPageUrl,
+} from "./composables/useFormatters";
+import { useActivityTab } from "./composables/useActivityTab";
+import { useTmdbTab } from "./composables/useTmdbTab";
+import { useWebhookNotifyTab } from "./composables/useWebhookNotifyTab";
+import { useJobsTab } from "./composables/useJobsTab";
+import { useUsersTab } from "./composables/useUsersTab";
+import { useRechargeRecordsTab } from "./composables/useRechargeRecordsTab";
+import { useMembershipTab } from "./composables/useMembershipTab";
+import { useNotificationTab } from "./composables/useNotificationTab";
 
 const authToken = ref(localStorage.getItem("emby_auth_token") || "");
 const isAuthenticated = computed(() => Boolean(authToken.value));
@@ -678,28 +372,7 @@ const loginForm = reactive({
 });
 
 const tab = ref("activity");
-const search = ref("");
-const users = ref<UserListItem[]>([]);
-const activities = ref<EmbyActivityItem[]>([]);
-const activitiesFetchedAt = ref<string | null>(null);
-const membershipQueryId = ref("");
-const membershipResult = ref("尚未查询");
-const tmdbQuery = ref("");
-const tmdbSummary = ref("尚未搜索");
-const tmdbHasSearched = ref(false);
-const tmdbResults = ref<TmdbSearchItem[]>([]);
-const jobResult = ref("尚未执行");
-const syncResult = ref("尚未同步");
-const notifyResult = ref("尚未保存");
-const expireJobCronResult = ref("尚未保存");
-const rechargeRecords = ref<RechargeRecordItem[]>([]);
-const rechargeRecordQuery = ref("");
-const webhookNotifyRecords = ref<WebhookEmailNotificationItem[]>([]);
-const webhookNotifyQuery = ref("");
 const webhookReceiveUrl = `${window.location.origin}/api/webhooks/emby`;
-const webhookNotifyPage = ref(1);
-const webhookNotifyPageSize = ref(20);
-const webhookNotifyTotal = ref(0);
 const createDialogVisible = ref(false);
 const passwordDialogVisible = ref(false);
 const policyDialogVisible = ref(false);
@@ -767,15 +440,6 @@ const passwordForm = reactive({
   password: "",
 });
 
-const notificationForm = reactive<NotificationSettings>({
-  senderEmail: "",
-  emailAuthCode: "",
-  smtpHost: "",
-  smtpPort: 465,
-  smtpSecure: true,
-  ingestionPushEnabled: true,
-});
-
 const weekDayOptions = [
   { value: "0", label: "周日" },
   { value: "1", label: "周一" },
@@ -786,47 +450,15 @@ const weekDayOptions = [
   { value: "6", label: "周六" },
 ];
 
-const expireJobCronMode = ref<"simple" | "custom">("simple");
-const expireJobCronInput = ref("5 2 * * *");
-const expireJobSimple = reactive<{
-  kind: "daily" | "weekly";
-  hour: number;
-  minute: number;
-  weekday: string;
-}>({
-  kind: "daily",
-  hour: 2,
-  minute: 5,
-  weekday: "1",
-});
-
 const loading = reactive({
   login: false,
-  activities: false,
-  users: false,
   recharge: false,
   expiry: false,
-  rechargeList: false,
-  webhookNotifyList: false,
-  membership: false,
-  tmdb: false,
-  job: false,
-  syncUsers: false,
   createUser: false,
   passwordSave: false,
-  notifySettings: false,
-  jobCron: false,
   policyLoad: false,
   policySave: false,
 });
-
-const playingActivities = computed(() =>
-  activities.value.filter((item) => item.playbackState === "PLAYING"),
-);
-
-const nonPlayingActivities = computed(() =>
-  activities.value.filter((item) => item.playbackState !== "PLAYING"),
-);
 
 function client() {
   return createAdminClient({
@@ -835,224 +467,89 @@ function client() {
   });
 }
 
-function formatToChinaTime(value?: string | null): string {
-  if (!value) {
-    return "-";
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return String(value);
-  }
-  return new Intl.DateTimeFormat("zh-CN", {
-    timeZone: "Asia/Shanghai",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  }).format(date);
-}
+const {
+  search,
+  users,
+  syncResult,
+  loadingUsers,
+  loadingSyncUsers,
+  fetchUsers,
+  syncUsersFromEmby,
+} = useUsersTab(client);
 
-function formatPlaybackProgress(positionTicks: number | null, runtimeTicks: number | null): string {
-  if (!positionTicks || !runtimeTicks || runtimeTicks <= 0) {
-    return "-";
-  }
-  const ratio = Math.max(0, Math.min(100, (positionTicks / runtimeTicks) * 100));
-  return `${ratio.toFixed(1)}%`;
-}
+const {
+  activities,
+  activitiesFetchedAt,
+  loadingActivities,
+  fetchActivities,
+} = useActivityTab(client);
 
-function formatActivityState(state: EmbyActivityItem["playbackState"]): string {
-  if (state === "PLAYING") {
-    return "播放中";
-  }
-  if (state === "PAUSED") {
-    return "已暂停";
-  }
-  return "空闲";
-}
+const {
+  rechargeRecords,
+  rechargeRecordQuery,
+  loadingRechargeList,
+  fetchRechargeRecords,
+} = useRechargeRecordsTab(client);
 
-function getActivityImageUrl(item: EmbyActivityItem): string {
-  if (!item.primaryImageItemId) {
-    return "";
-  }
-  return `/api/emby/images/primary/${encodeURIComponent(item.primaryImageItemId)}`;
-}
+const {
+  membershipQueryId,
+  membershipResult,
+  loadingMembership,
+  fetchMembership,
+} = useMembershipTab(client);
 
-function formatMembershipStatus(status?: UserListItem["membershipStatus"]): string {
-  if (status === "ACTIVE") {
-    return "有效";
-  }
-  if (status === "EXPIRED") {
-    return "已到期";
-  }
-  return "未知";
-}
+const {
+  notifyResult,
+  loadingNotifySettings,
+  notificationForm,
+  updateNotificationForm,
+  loadNotificationSettings,
+  submitNotificationSettings,
+} = useNotificationTab(client);
 
-function formatWebhookSendStatus(status: string): string {
-  if (status === "SENT") {
-    return "发送成功";
-  }
-  if (status === "FAILED") {
-    return "发送失败";
-  }
-  if (status === "SKIPPED") {
-    return "已跳过";
-  }
-  if (status === "PENDING") {
-    return "待处理";
-  }
-  return status || "未知";
-}
+const {
+  tmdbQuery,
+  tmdbSummary,
+  tmdbHasSearched,
+  tmdbResults,
+  loadingTmdb,
+  searchTmdb,
+  copyTmdbId,
+} = useTmdbTab(client);
 
-function formatTmdbRating(rating: number | null, voteCount: number | null): string {
-  if (rating == null) {
-    return "-";
-  }
-  if (voteCount == null) {
-    return rating.toFixed(1);
-  }
-  return `${rating.toFixed(1)} / ${voteCount}票`;
-}
+const {
+  webhookNotifyRecords,
+  webhookNotifyQuery,
+  webhookNotifyPage,
+  webhookNotifyPageSize,
+  webhookNotifyTotal,
+  loadingWebhookNotifyList,
+  fetchWebhookNotifyRecords,
+  searchWebhookNotifyRecords,
+  handleWebhookPageSizeChange,
+  copyWebhookReceiveUrl,
+} = useWebhookNotifyTab(client, webhookReceiveUrl);
 
-function formatRuntime(runtime: number | null): string {
-  if (!runtime || runtime <= 0) {
-    return "-";
-  }
-  return `${runtime} 分钟`;
-}
+const {
+  jobResult,
+  expireJobCronResult,
+  expireJobCronMode,
+  expireJobCronInput,
+  expireJobSimple,
+  loadingJob,
+  loadingJobCron,
+  getSimpleExpireCron,
+  getSimpleExpireCronHumanText,
+  loadExpireJobCronSettings,
+  submitExpireJobCron,
+  runExpireJob,
+} = useJobsTab(client);
 
-function formatSeasonEpisode(seasonCount: number | null, episodeCount: number | null): string {
-  const seasonText = seasonCount != null ? `${seasonCount}季` : "-";
-  const episodeText = episodeCount != null ? `${episodeCount}集` : "-";
-  return `${seasonText} / ${episodeText}`;
-}
-
-function getTmdbPageUrl(item: TmdbSearchItem): string {
-  return item.mediaType === "movie"
-    ? `https://www.themoviedb.org/movie/${item.id}`
-    : `https://www.themoviedb.org/tv/${item.id}`;
-}
-
-async function copyTmdbId(id: number) {
-  try {
-    await navigator.clipboard.writeText(String(id));
-    ElMessage.success(`TMDB ID ${id} 已复制`);
-  } catch {
-    ElMessage.error("复制 TMDB ID 失败");
-  }
-}
-
-function getSimpleExpireCron(): string {
-  const minute = Math.max(0, Math.min(59, Number(expireJobSimple.minute)));
-  const hour = Math.max(0, Math.min(23, Number(expireJobSimple.hour)));
-  if (expireJobSimple.kind === "weekly") {
-    return `${minute} ${hour} * * ${expireJobSimple.weekday}`;
-  }
-  return `${minute} ${hour} * * *`;
-}
-
-function getSimpleExpireCronHumanText(): string {
-  const hour = String(Math.max(0, Math.min(23, Number(expireJobSimple.hour)))).padStart(2, "0");
-  const minute = String(Math.max(0, Math.min(59, Number(expireJobSimple.minute)))).padStart(2, "0");
-  if (expireJobSimple.kind === "weekly") {
-    const weekDayLabel = weekDayOptions.find((item) => item.value === expireJobSimple.weekday)?.label ?? "周一";
-    return `${weekDayLabel} ${hour}:${minute}`;
-  }
-  return `每天 ${hour}:${minute}`;
-}
-
-function applyCronToSimpleForm(expr: string): boolean {
-  const parts = expr.trim().split(/\s+/);
-  if (parts.length !== 5) {
-    return false;
-  }
-  const [minute, hour, dayOfMonth, month, weekDay] = parts;
-  if (dayOfMonth !== "*" || month !== "*") {
-    return false;
-  }
-  if (!/^\d+$/.test(minute) || !/^\d+$/.test(hour)) {
-    return false;
-  }
-  const minuteNum = Number(minute);
-  const hourNum = Number(hour);
-  if (minuteNum < 0 || minuteNum > 59 || hourNum < 0 || hourNum > 23) {
-    return false;
-  }
-
-  expireJobSimple.minute = minuteNum;
-  expireJobSimple.hour = hourNum;
-  if (weekDay === "*") {
-    expireJobSimple.kind = "daily";
-    return true;
-  }
-  if (/^[0-6]$/.test(weekDay)) {
-    expireJobSimple.kind = "weekly";
-    expireJobSimple.weekday = weekDay;
-    return true;
-  }
-  return false;
-}
-
-async function fetchActivities() {
-  loading.activities = true;
-  try {
-    const { data } = await client().listActivities();
-    activities.value = data.activities;
-    activitiesFetchedAt.value = data.fetchedAt;
-  } catch (error: any) {
-    ElMessage.error(error?.response?.data?.message || "查询实时活动失败");
-  } finally {
-    loading.activities = false;
-  }
-}
-
-async function loadExpireJobCronSettings() {
-  loading.jobCron = true;
-  try {
-    const { data } = await client().getExpireJobSettings();
-    const cronExpr = data.settings.expireJobCron.trim();
-    expireJobCronInput.value = cronExpr;
-    if (applyCronToSimpleForm(cronExpr)) {
-      expireJobCronMode.value = "simple";
-    } else {
-      expireJobCronMode.value = "custom";
-    }
-  } catch (error: any) {
-    ElMessage.error(error?.response?.data?.message || "加载到期任务调度配置失败");
-  } finally {
-    loading.jobCron = false;
-  }
-}
-
-async function submitExpireJobCron() {
-  loading.jobCron = true;
-  try {
-    const expireJobCron = expireJobCronMode.value === "simple"
-      ? getSimpleExpireCron()
-      : expireJobCronInput.value.trim();
-    const { data } = await client().updateExpireJobSettings({ expireJobCron });
-    expireJobCronInput.value = data.settings.expireJobCron;
-    expireJobCronResult.value = `保存成功: ${data.settings.expireJobCron}`;
-    ElMessage.success("到期任务调度已更新");
-  } catch (error: any) {
-    ElMessage.error(error?.response?.data?.message || "保存到期任务调度失败");
-  } finally {
-    loading.jobCron = false;
-  }
-}
-
-async function fetchUsers() {
-  loading.users = true;
-  try {
-    const { data } = await client().listUsers(search.value);
-    users.value = data.users;
-  } catch (error: any) {
-    ElMessage.error(error?.response?.data?.message || "查询用户失败");
-  } finally {
-    loading.users = false;
-  }
+function updateExpireJobSimple(value: typeof expireJobSimple) {
+  expireJobSimple.kind = value.kind;
+  expireJobSimple.hour = value.hour;
+  expireJobSimple.minute = value.minute;
+  expireJobSimple.weekday = value.weekday;
 }
 
 async function submitLogin() {
@@ -1112,119 +609,6 @@ async function submitRecharge() {
     ElMessage.error(error?.response?.data?.message || "充值失败");
   } finally {
     loading.recharge = false;
-  }
-}
-
-async function fetchRechargeRecords() {
-  loading.rechargeList = true;
-  try {
-    const { data } = await client().listRecharges(rechargeRecordQuery.value.trim(), 200);
-    rechargeRecords.value = data.records;
-  } catch (error: any) {
-    ElMessage.error(error?.response?.data?.message || "查询充值记录失败");
-  } finally {
-    loading.rechargeList = false;
-  }
-}
-
-async function fetchWebhookNotifyRecords() {
-  loading.webhookNotifyList = true;
-  try {
-    const { data } = await client().listWebhookEmailNotificationsPaged(
-      webhookNotifyQuery.value.trim(),
-      webhookNotifyPage.value,
-      webhookNotifyPageSize.value,
-    );
-    webhookNotifyRecords.value = data.records;
-    webhookNotifyTotal.value = data.total;
-    webhookNotifyPage.value = data.page;
-    webhookNotifyPageSize.value = data.pageSize;
-  } catch (error: any) {
-    ElMessage.error(error?.response?.data?.message || "查询Webhook邮件通知失败");
-  } finally {
-    loading.webhookNotifyList = false;
-  }
-}
-
-function searchWebhookNotifyRecords() {
-  webhookNotifyPage.value = 1;
-  fetchWebhookNotifyRecords();
-}
-
-function handleWebhookPageSizeChange() {
-  webhookNotifyPage.value = 1;
-  fetchWebhookNotifyRecords();
-}
-
-async function copyWebhookReceiveUrl() {
-  try {
-    await navigator.clipboard.writeText(webhookReceiveUrl);
-    ElMessage.success("Webhook 地址已复制");
-  } catch {
-    ElMessage.error("复制失败，请手动复制");
-  }
-}
-
-async function fetchMembership() {
-  loading.membership = true;
-  try {
-    const { data } = await client().getMembership(membershipQueryId.value.trim());
-    membershipResult.value = JSON.stringify(data, null, 2);
-  } catch (error: any) {
-    ElMessage.error(error?.response?.data?.message || "查询失败");
-  } finally {
-    loading.membership = false;
-  }
-}
-
-async function searchTmdb() {
-  const keyword = tmdbQuery.value.trim();
-  if (!keyword) {
-    ElMessage.warning("请输入 TMDB 搜索关键字");
-    return;
-  }
-
-  loading.tmdb = true;
-  try {
-    const { data } = await client().searchTmdb(keyword, 1);
-    tmdbHasSearched.value = true;
-    tmdbResults.value = data.results;
-    tmdbSummary.value = `共 ${data.totalResults} 条，当前展示 ${data.results.length} 条`;
-  } catch (error: any) {
-    tmdbHasSearched.value = true;
-    tmdbResults.value = [];
-    tmdbSummary.value = error?.response?.data?.message || "TMDB 搜索失败";
-    ElMessage.error(error?.response?.data?.message || "TMDB 搜索失败");
-  } finally {
-    loading.tmdb = false;
-  }
-}
-
-async function runExpireJob() {
-  loading.job = true;
-  try {
-    const { data } = await client().runExpireJob();
-    jobResult.value = JSON.stringify(data);
-    ElMessage.success("任务已执行");
-  } catch (error: any) {
-    ElMessage.error(error?.response?.data?.message || "任务执行失败");
-  } finally {
-    loading.job = false;
-  }
-}
-
-async function syncUsersFromEmby() {
-  loading.syncUsers = true;
-  try {
-    const { data } = await client().syncEmbyUsers();
-    syncResult.value = `同步完成: total=${data.total}, created=${data.created}, updated=${data.updated}`;
-    ElMessage.success("用户同步成功");
-    await fetchUsers();
-  } catch (error: any) {
-    syncResult.value = `同步失败: ${error?.response?.data?.message || error?.message || "未知错误"}`;
-    ElMessage.error("用户同步失败");
-  } finally {
-    loading.syncUsers = false;
   }
 }
 
@@ -1432,48 +816,6 @@ async function submitPolicyUpdate() {
   }
 }
 
-async function loadNotificationSettings() {
-  loading.notifySettings = true;
-  try {
-    const { data } = await client().getNotificationSettings();
-    notificationForm.senderEmail = data.settings.senderEmail ?? "";
-    notificationForm.emailAuthCode = data.settings.emailAuthCode ?? "";
-    notificationForm.smtpHost = data.settings.smtpHost ?? "";
-    notificationForm.smtpPort = Number(data.settings.smtpPort ?? 465);
-    notificationForm.smtpSecure = Boolean(data.settings.smtpSecure);
-    notificationForm.ingestionPushEnabled = Boolean(data.settings.ingestionPushEnabled);
-  } catch (error: any) {
-    ElMessage.error(error?.response?.data?.message || "加载通知设置失败");
-  } finally {
-    loading.notifySettings = false;
-  }
-}
-
-async function submitNotificationSettings() {
-  loading.notifySettings = true;
-  try {
-    const { data } = await client().updateNotificationSettings({
-      senderEmail: (notificationForm.senderEmail ?? "").trim() || null,
-      emailAuthCode: (notificationForm.emailAuthCode ?? "").trim() || null,
-      smtpHost: (notificationForm.smtpHost ?? "").trim() || null,
-      smtpPort: Number(notificationForm.smtpPort),
-      smtpSecure: notificationForm.smtpSecure,
-      ingestionPushEnabled: notificationForm.ingestionPushEnabled,
-    });
-    notifyResult.value = `保存成功: 推送${data.settings.ingestionPushEnabled ? "开启" : "关闭"}`;
-    ElMessage.success("通知设置已保存");
-  } catch (error: any) {
-    const issues = error?.response?.data?.issues;
-    if (Array.isArray(issues) && issues.length > 0) {
-      ElMessage.error(`${issues[0].path || "payload"}: ${issues[0].message}`);
-    } else {
-      ElMessage.error(error?.response?.data?.message || "保存通知设置失败");
-    }
-  } finally {
-    loading.notifySettings = false;
-  }
-}
-
 if (authToken.value) {
   fetchActivities();
   fetchUsers();
@@ -1495,181 +837,6 @@ if (authToken.value) {
   grid-column: span 2;
 }
 
-.activity-sections {
-  display: grid;
-  gap: 18px;
-}
-
-.activity-section {
-  display: grid;
-  gap: 12px;
-}
-
-.activity-section-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.activity-section-head h3 {
-  margin: 0;
-  font-size: 18px;
-}
-
-.activity-section-head p {
-  margin: 4px 0 0;
-  color: #909399;
-  font-size: 13px;
-}
-
-.playing-cards {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.tmdb-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.tmdb-card {
-  border: 1px solid #ebeef5;
-  border-radius: 14px;
-  overflow: hidden;
-  background: #fff;
-  display: grid;
-  grid-template-columns: 180px minmax(0, 1fr);
-  min-height: 270px;
-}
-
-.tmdb-poster-wrap {
-  background: linear-gradient(135deg, #e2e8f0, #f8fafc);
-  min-height: 100%;
-}
-
-.tmdb-poster {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.tmdb-poster-fallback {
-  height: 100%;
-  min-height: 270px;
-  display: grid;
-  place-items: center;
-  color: #475569;
-  font-size: 16px;
-}
-
-.tmdb-body {
-  padding: 16px;
-  display: grid;
-  gap: 8px;
-  align-content: start;
-}
-
-.tmdb-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.tmdb-meta {
-  color: #606266;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.tmdb-tagline {
-  color: #0f766e;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.tmdb-overview {
-  margin: 0;
-  color: #303133;
-  font-size: 14px;
-  line-height: 1.7;
-}
-
-.playing-card {
-  border: 1px solid #ebeef5;
-  border-radius: 14px;
-  overflow: hidden;
-  background:
-    linear-gradient(180deg, rgba(248, 250, 252, 0.95), rgba(255, 255, 255, 1));
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
-}
-
-.playing-poster-wrap {
-  position: relative;
-  aspect-ratio: 16 / 9;
-  background: linear-gradient(135deg, #dbeafe, #eff6ff 45%, #f8fafc);
-}
-
-.playing-poster {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.playing-poster-fallback {
-  width: 100%;
-  height: 100%;
-  display: grid;
-  place-items: center;
-  color: #475569;
-  font-size: 14px;
-  letter-spacing: 0.08em;
-}
-
-.playing-state-tag {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-}
-
-.playing-body {
-  padding: 14px;
-  display: grid;
-  gap: 6px;
-}
-
-.activity-cards {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.activity-card {
-  border: 1px solid #ebeef5;
-  border-radius: 8px;
-  padding: 10px;
-  background: #fff;
-  display: grid;
-  gap: 4px;
-}
-
-.activity-meta {
-  color: #606266;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.activity-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
 @media (max-width: 760px) {
   .policy-grid {
     grid-template-columns: 1fr;
@@ -1677,34 +844,6 @@ if (authToken.value) {
 
   .span-2 {
     grid-column: span 1;
-  }
-
-  .playing-cards,
-  .tmdb-grid,
-  .activity-cards {
-    grid-template-columns: 1fr;
-  }
-
-  .tmdb-card {
-    grid-template-columns: 1fr;
-  }
-
-  .tmdb-poster-wrap {
-    aspect-ratio: 2 / 3;
-  }
-}
-
-@media (min-width: 761px) and (max-width: 1180px) {
-  .playing-cards {
-    grid-template-columns: 1fr;
-  }
-
-  .tmdb-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .activity-cards {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>

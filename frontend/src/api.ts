@@ -5,6 +5,8 @@ export interface AdminSettings {
   authToken: string;
 }
 
+export type AdminClient = ReturnType<typeof createAdminClient>;
+
 export interface UserListItem {
   embyUserId: string;
   embyUsername: string;
