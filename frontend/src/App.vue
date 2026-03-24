@@ -722,7 +722,7 @@ async function removeUser(row: UserListItem) {
     return;
   }
 
-  loading.users = true;
+  loadingUsers.value = true;
   try {
     await client().deleteEmbyUser(row.embyUserId);
     ElMessage.success("用户已删除");
@@ -730,7 +730,7 @@ async function removeUser(row: UserListItem) {
   } catch (error: any) {
     ElMessage.error(error?.response?.data?.message || "删除用户失败");
   } finally {
-    loading.users = false;
+    loadingUsers.value = false;
   }
 }
 

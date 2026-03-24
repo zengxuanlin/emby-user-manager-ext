@@ -98,7 +98,7 @@ const props = defineProps({
     required: true,
   },
   fetchedAt: {
-    type: String,
+    type: String as PropType<string | null>,
     default: null,
   },
   loading: {
