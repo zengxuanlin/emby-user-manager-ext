@@ -127,7 +127,7 @@ defineEmits<{
 <style scoped>
 .tmdb-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
 }
 
@@ -148,8 +148,9 @@ defineEmits<{
 .tmdb-poster {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
+  background: #f8fafc;
 }
 
 .tmdb-poster-fallback {
@@ -208,7 +209,7 @@ defineEmits<{
 
 @media (min-width: 761px) and (max-width: 1180px) {
   .tmdb-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>
