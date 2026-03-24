@@ -92,6 +92,26 @@ function ensureConfigured(): { baseUrl: string; apiKey: string } {
   };
 }
 
+function buildBaseUrlCandidates(baseUrl: string): string[] {
+  const trimmed = baseUrl.replace(/\/+$/, "");
+  const candidates = [trimmed];
+
+  try {
+    const parsed = new URL(trimmed);
+    const pathname = parsed.pathname.replace(/\/+$/, "");
+    if (!pathname.endsWith("/3")) {
+      parsed.pathname = pathname ? `${pathname}/3` : "/3";
+      candidates.push(parsed.toString().replace(/\/+$/, ""));
+    }
+  } catch {
+    if (!trimmed.endsWith("/3")) {
+      candidates.push(`${trimmed}/3`);
+    }
+  }
+
+  return [...new Set(candidates)];
+}
+
 function asMediaType(value: string | undefined): TmdbMediaType | null {
   if (value === "movie" || value === "tv") {
     return value;
@@ -102,17 +122,33 @@ function asMediaType(value: string | undefined): TmdbMediaType | null {
 async function tmdbFetch(path: string, init?: RequestInit): Promise<Response> {
   const { baseUrl, apiKey } = ensureConfigured();
   const normalized = path.startsWith("/") ? path : `/${path}`;
-  const url = new URL(`${baseUrl}${normalized}`);
-  url.searchParams.set("api_key", apiKey);
-  url.searchParams.set("language", "zh-CN");
+  const candidates = buildBaseUrlCandidates(baseUrl);
 
-  return fetch(url, {
-    ...init,
-    headers: {
-      Accept: "application/json",
-      ...(init?.headers ?? {}),
-    },
-  });
+  let lastResponse: Response | null = null;
+  for (const candidate of candidates) {
+    const url = new URL(`${candidate}${normalized}`);
+    url.searchParams.set("api_key", apiKey);
+    url.searchParams.set("language", "zh-CN");
+
+    const response = await fetch(url, {
+      ...init,
+      headers: {
+        Accept: "application/json",
+        ...(init?.headers ?? {}),
+      },
+    });
+
+    if (response.ok || response.status !== 404) {
+      return response;
+    }
+    lastResponse = response;
+  }
+
+  if (lastResponse) {
+    return lastResponse;
+  }
+
+  throw new Error("TMDB request failed before receiving a response");
 }
 
 async function parseError(response: Response): Promise<string> {
@@ -168,19 +204,14 @@ export async function searchTmdbByKeyword(
   totalResults: number;
   results: TmdbSearchResultItem[];
 }> {
-  const { baseUrl, apiKey } = ensureConfigured();
-  const url = new URL(`${baseUrl}/search/multi`);
-  url.searchParams.set("api_key", apiKey);
-  url.searchParams.set("language", "zh-CN");
-  url.searchParams.set("query", keyword);
-  url.searchParams.set("page", String(page));
-  url.searchParams.set("include_adult", "false");
+  const searchUrl = new URL("http://tmdb.local/search/multi");
+  searchUrl.searchParams.set("query", keyword);
+  searchUrl.searchParams.set("page", String(page));
+  searchUrl.searchParams.set("include_adult", "false");
 
-  const searchResponse = await fetch(url, {
-    headers: {
-      Accept: "application/json",
-    },
-  });
+  const searchResponse = await tmdbFetch(
+    `${searchUrl.pathname}?${searchUrl.searchParams.toString()}`,
+  );
 
   if (!searchResponse.ok) {
     throw new Error(`TMDB search failed: ${await parseError(searchResponse)}`);
