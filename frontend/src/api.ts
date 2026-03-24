@@ -77,6 +77,21 @@ export interface EmbyActivityItem {
   primaryImageItemId: string | null;
 }
 
+export interface EmbyStatsItem {
+  itemId: string;
+  name: string;
+  type: string | null;
+  overview: string | null;
+  dateCreated: string | null;
+  premiereDate: string | null;
+  productionYear: number | null;
+  communityRating: number | null;
+  runtimeTicks: number | null;
+  playCount: number | null;
+  lastPlayedDate: string | null;
+  primaryImageItemId: string | null;
+}
+
 export interface NotificationSettings {
   senderEmail: string | null;
   emailAuthCode: string | null;
@@ -184,6 +199,13 @@ export function createAdminClient(settings: AdminSettings) {
     },
     listActivities() {
       return http.get<{ activities: EmbyActivityItem[]; fetchedAt: string }>("/admin/emby/activities");
+    },
+    getEmbyStats() {
+      return http.get<{
+        latest: EmbyStatsItem[];
+        popular: EmbyStatsItem[];
+        fetchedAt: string;
+      }>("/admin/emby/stats");
     },
     syncEmbyUsers() {
       return http.post<{

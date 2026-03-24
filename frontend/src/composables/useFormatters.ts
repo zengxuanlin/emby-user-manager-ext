@@ -1,4 +1,4 @@
-import type { EmbyActivityItem, TmdbSearchItem, UserListItem } from "../api";
+import type { EmbyActivityItem, EmbyStatsItem, TmdbSearchItem, UserListItem } from "../api";
 
 export function formatToChinaTime(value?: string | null): string {
   if (!value) {
@@ -98,4 +98,41 @@ export function getTmdbPageUrl(item: TmdbSearchItem): string {
   return item.mediaType === "movie"
     ? `https://www.themoviedb.org/movie/${item.id}`
     : `https://www.themoviedb.org/tv/${item.id}`;
+}
+
+export function getEmbyStatsImageUrl(item: EmbyStatsItem): string {
+  if (!item.primaryImageItemId) {
+    return "";
+  }
+  return `/api/emby/images/primary/${encodeURIComponent(item.primaryImageItemId)}`;
+}
+
+export function formatEmbyRuntimeTicks(runtimeTicks: number | null): string {
+  if (!runtimeTicks || runtimeTicks <= 0) {
+    return "-";
+  }
+  const totalMinutes = Math.round(runtimeTicks / 10_000_000 / 60);
+  if (totalMinutes < 60) {
+    return `${totalMinutes} 分钟`;
+  }
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return minutes > 0 ? `${hours}小时${minutes}分钟` : `${hours}小时`;
+}
+
+export function formatEmbyMediaType(type: string | null): string {
+  if (type === "Movie") {
+    return "电影";
+  }
+  if (type === "Series") {
+    return "剧集";
+  }
+  return type || "媒体";
+}
+
+export function formatEmbyRating(rating: number | null): string {
+  if (rating == null) {
+    return "-";
+  }
+  return rating.toFixed(1);
 }

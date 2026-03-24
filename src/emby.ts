@@ -48,6 +48,26 @@ interface EmbySessionItem {
   };
 }
 
+interface EmbyItemDto {
+  Id?: string;
+  Name?: string;
+  Type?: string;
+  DateCreated?: string;
+  PremiereDate?: string;
+  ProductionYear?: number;
+  Overview?: string;
+  CommunityRating?: number;
+  RunTimeTicks?: number;
+  UserData?: {
+    PlayCount?: number;
+    LastPlayedDate?: string;
+  };
+}
+
+interface EmbyItemsResponse {
+  Items?: EmbyItemDto[];
+}
+
 function buildUrl(path: string): string {
   const normalized = path.startsWith("/") ? path : `/${path}`;
   const url = new URL(`${config.embyBaseUrl}${normalized}`);
@@ -113,6 +133,21 @@ export interface EmbyRealtimeActivity {
   primaryImageItemId: string | null;
 }
 
+export interface EmbyStatsItem {
+  itemId: string;
+  name: string;
+  type: string | null;
+  overview: string | null;
+  dateCreated: string | null;
+  premiereDate: string | null;
+  productionYear: number | null;
+  communityRating: number | null;
+  runtimeTicks: number | null;
+  playCount: number | null;
+  lastPlayedDate: string | null;
+  primaryImageItemId: string | null;
+}
+
 export async function listEmbyUsers(): Promise<EmbyUserSummary[]> {
   const response = await embyFetch("/Users");
   if (!response.ok) {
@@ -163,6 +198,72 @@ export async function listEmbyRealtimeActivities(): Promise<EmbyRealtimeActivity
       primaryImageItemId: nowPlaying?.SeriesId ?? nowPlaying?.Id ?? null,
     };
   });
+}
+
+function toStatsItem(item: EmbyItemDto): EmbyStatsItem | null {
+  if (!item.Id || !item.Name) {
+    return null;
+  }
+  return {
+    itemId: item.Id,
+    name: item.Name,
+    type: item.Type ?? null,
+    overview: item.Overview ?? null,
+    dateCreated: item.DateCreated ?? null,
+    premiereDate: item.PremiereDate ?? null,
+    productionYear: typeof item.ProductionYear === "number" ? item.ProductionYear : null,
+    communityRating: typeof item.CommunityRating === "number" ? item.CommunityRating : null,
+    runtimeTicks: typeof item.RunTimeTicks === "number" ? item.RunTimeTicks : null,
+    playCount: typeof item.UserData?.PlayCount === "number" ? item.UserData.PlayCount : null,
+    lastPlayedDate: item.UserData?.LastPlayedDate ?? null,
+    primaryImageItemId: item.Id,
+  };
+}
+
+async function listEmbyItemsWithParams(params: Record<string, string>): Promise<EmbyStatsItem[]> {
+  const search = new URLSearchParams(params);
+  const response = await embyFetch(`/Items?${search.toString()}`);
+  if (!response.ok) {
+    throw new Error(`Emby items query failed: ${await parseError(response)}`);
+  }
+  const data = (await response.json()) as EmbyItemsResponse;
+  return (data.Items ?? [])
+    .map(toStatsItem)
+    .filter((item): item is EmbyStatsItem => Boolean(item));
+}
+
+export async function getEmbyDashboardStats(limit = 10): Promise<{
+  latest: EmbyStatsItem[];
+  popular: EmbyStatsItem[];
+}> {
+  const commonParams = {
+    Recursive: "true",
+    IncludeItemTypes: "Movie,Series",
+    Fields: "Overview,DateCreated,PremiereDate,ProductionYear,CommunityRating,RunTimeTicks,UserData",
+    Limit: String(limit),
+    ImageTypeLimit: "1",
+    EnableImages: "true",
+    EnableUserData: "true",
+  };
+
+  const [latest, popular] = await Promise.all([
+    listEmbyItemsWithParams({
+      ...commonParams,
+      SortBy: "DateCreated",
+      SortOrder: "Descending",
+    }),
+    listEmbyItemsWithParams({
+      ...commonParams,
+      SortBy: "PlayCount",
+      SortOrder: "Descending",
+      Filters: "IsPlayed",
+    }),
+  ]);
+
+  return {
+    latest,
+    popular,
+  };
 }
 
 async function tryCreateEmbyUser(username: string): Promise<EmbyUserDetail> {

@@ -79,6 +79,21 @@
           />
         </el-tab-pane>
 
+        <el-tab-pane label="Emby统计" name="emby-stats">
+          <EmbyStatsTab
+            :fetched-at="embyStatsFetchedAt"
+            :latest="embyStatsLatest"
+            :popular="embyStatsPopular"
+            :loading="loadingEmbyStats"
+            :format-to-china-time="formatToChinaTime"
+            :get-stats-image-url="getEmbyStatsImageUrl"
+            :format-runtime-ticks="formatEmbyRuntimeTicks"
+            :format-media-type="formatEmbyMediaType"
+            :format-rating="formatEmbyRating"
+            @refresh="fetchEmbyStats"
+          />
+        </el-tab-pane>
+
         <el-tab-pane label="TMDB搜索" name="tmdb">
           <TmdbTab
             :query="tmdbQuery"
@@ -339,12 +354,16 @@ import ActivityTab from "./components/tabs/ActivityTab.vue";
 import UsersTab from "./components/tabs/UsersTab.vue";
 import RechargeRecordsTab from "./components/tabs/RechargeRecordsTab.vue";
 import MembershipTab from "./components/tabs/MembershipTab.vue";
+import EmbyStatsTab from "./components/tabs/EmbyStatsTab.vue";
 import TmdbTab from "./components/tabs/TmdbTab.vue";
 import NotificationTab from "./components/tabs/NotificationTab.vue";
 import WebhookNotifyTab from "./components/tabs/WebhookNotifyTab.vue";
 import JobsTab from "./components/tabs/JobsTab.vue";
 import {
   formatActivityState,
+  formatEmbyMediaType,
+  formatEmbyRating,
+  formatEmbyRuntimeTicks,
   formatMembershipStatus,
   formatPlaybackProgress,
   formatRuntime,
@@ -353,9 +372,11 @@ import {
   formatToChinaTime,
   formatWebhookSendStatus,
   getActivityImageUrl,
+  getEmbyStatsImageUrl,
   getTmdbPageUrl,
 } from "./composables/useFormatters";
 import { useActivityTab } from "./composables/useActivityTab";
+import { useEmbyStatsTab } from "./composables/useEmbyStatsTab";
 import { useTmdbTab } from "./composables/useTmdbTab";
 import { useWebhookNotifyTab } from "./composables/useWebhookNotifyTab";
 import { useJobsTab } from "./composables/useJobsTab";
@@ -485,6 +506,14 @@ const {
 } = useActivityTab(client);
 
 const {
+  embyStatsLatest,
+  embyStatsPopular,
+  embyStatsFetchedAt,
+  loadingEmbyStats,
+  fetchEmbyStats,
+} = useEmbyStatsTab(client);
+
+const {
   rechargeRecords,
   rechargeRecordQuery,
   loadingRechargeList,
@@ -569,6 +598,7 @@ async function submitLogin() {
     ElMessage.success("登录成功");
     await Promise.all([
       fetchActivities(),
+      fetchEmbyStats(),
       fetchUsers(),
       loadNotificationSettings(),
       loadExpireJobCronSettings(),
@@ -818,6 +848,7 @@ async function submitPolicyUpdate() {
 
 if (authToken.value) {
   fetchActivities();
+  fetchEmbyStats();
   fetchUsers();
   loadNotificationSettings();
   loadExpireJobCronSettings();

@@ -17,6 +17,7 @@ import {
 import {
   createEmbyUser,
   deleteEmbyUser,
+  getEmbyDashboardStats,
   getEmbyUserPolicy,
   listEmbyRealtimeActivities,
   listEmbyUsers,
@@ -219,6 +220,18 @@ app.get("/admin/emby/users", requireAdmin, async (req, res) => {
 app.get("/admin/emby/activities", requireAdmin, async (_req, res) => {
   const activities = (await listEmbyRealtimeActivities()).filter((item) => Boolean(item.userId));
   res.json({ activities, fetchedAt: new Date().toISOString() });
+});
+
+app.get("/admin/emby/stats", requireAdmin, async (_req, res, next) => {
+  try {
+    const stats = await getEmbyDashboardStats(10);
+    res.json({
+      ...stats,
+      fetchedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.get("/admin/tmdb/search", requireAdmin, async (req, res, next) => {
