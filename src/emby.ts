@@ -246,7 +246,7 @@ export async function getEmbyDashboardStats(limit = 10): Promise<{
     EnableUserData: "true",
   };
 
-  const [latest, popular] = await Promise.all([
+  const [latestResult, popularResult] = await Promise.allSettled([
     listEmbyItemsWithParams({
       ...commonParams,
       SortBy: "DateCreated",
@@ -256,13 +256,20 @@ export async function getEmbyDashboardStats(limit = 10): Promise<{
       ...commonParams,
       SortBy: "PlayCount",
       SortOrder: "Descending",
-      Filters: "IsPlayed",
+      IsPlayed: "true",
     }),
   ]);
 
+  if (latestResult.status === "rejected") {
+    console.warn("[emby] latest stats query failed", latestResult.reason);
+  }
+  if (popularResult.status === "rejected") {
+    console.warn("[emby] popular stats query failed", popularResult.reason);
+  }
+
   return {
-    latest,
-    popular,
+    latest: latestResult.status === "fulfilled" ? latestResult.value : [],
+    popular: popularResult.status === "fulfilled" ? popularResult.value : [],
   };
 }
 
