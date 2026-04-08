@@ -5,15 +5,21 @@
         <span>Webhook 接收地址：<code>{{ webhookReceiveUrl }}</code></span>
       </template>
     </el-alert>
-    <div class="row top-gap">
-      <el-button @click="$emit('copy-url')">复制地址</el-button>
-      <el-input
-        :model-value="query"
-        placeholder="搜索收件邮箱/事件类型/状态/用户名"
-        @update:model-value="$emit('update:query', $event)"
-        @keyup.enter="$emit('search')"
-      />
-      <el-button type="primary" @click="$emit('search')" :loading="loading">刷新记录</el-button>
+    <div class="toolbar top-gap">
+      <div class="toolbar-main">
+        <el-input
+          :model-value="query"
+          placeholder="搜索收件邮箱/事件类型/状态/用户名/内容"
+          @update:model-value="$emit('update:query', $event)"
+          @keyup.enter="$emit('search')"
+        />
+        <el-button type="primary" @click="$emit('search')" :loading="loading">刷新列表</el-button>
+      </div>
+      <div class="toolbar-meta">
+        <div class="toolbar-actions">
+          <el-button @click="$emit('copy-url')">复制地址</el-button>
+        </div>
+      </div>
     </div>
     <el-table :data="records" stripe class="top-gap">
       <el-table-column prop="createdAt" label="入库时间" min-width="180">
@@ -27,8 +33,17 @@
         </template>
       </el-table-column>
       <el-table-column prop="recipient" label="收件人" min-width="200" />
-      <el-table-column prop="eventType" label="事件类型" min-width="220" />
+      <el-table-column label="事件类型" min-width="220">
+        <template #default="{ row }">
+          {{ formatEmailEventType(row.eventType) }}
+        </template>
+      </el-table-column>
       <el-table-column prop="subject" label="主题" min-width="220" />
+      <el-table-column label="发送内容" min-width="360">
+        <template #default="{ row }">
+          <div class="email-body-preview">{{ row.body || "-" }}</div>
+        </template>
+      </el-table-column>
       <el-table-column label="发送状态" min-width="100">
         <template #default="{ row }">
           <el-tag :type="row.status === 'SENT' ? 'success' : row.status === 'FAILED' ? 'danger' : 'info'">
@@ -105,6 +120,10 @@ defineProps({
     type: Function as PropType<(status: string) => string>,
     required: true,
   },
+  formatEmailEventType: {
+    type: Function as PropType<(eventType: string) => string>,
+    required: true,
+  },
 });
 
 defineEmits<{
@@ -117,3 +136,43 @@ defineEmits<{
   (event: "page-size-change"): void;
 }>();
 </script>
+
+<style scoped>
+.toolbar {
+  display: grid;
+  gap: 10px;
+}
+
+.toolbar-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.toolbar-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.toolbar-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.email-body-preview {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+  color: #606266;
+}
+
+@media (max-width: 760px) {
+  .toolbar-main {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

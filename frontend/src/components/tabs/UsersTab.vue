@@ -7,19 +7,25 @@
       :closable="false"
     />
 
-    <div class="row top-gap">
-      <el-input
-        :model-value="search"
-        placeholder="搜索 Emby 用户ID/用户名"
-        @update:model-value="$emit('update:search', $event)"
-        @keyup.enter="$emit('fetch-users')"
-      />
-      <el-button type="primary" @click="$emit('open-create-dialog')">新增 Emby 用户</el-button>
-      <el-button @click="$emit('fetch-users')" :loading="loadingUsers">查询</el-button>
-      <el-button type="primary" plain @click="$emit('sync-users')" :loading="loadingSyncUsers">
-        同步 Emby 用户到本地
-      </el-button>
-      <span>{{ syncResult }}</span>
+    <div class="toolbar top-gap">
+      <div class="toolbar-main">
+        <el-input
+          :model-value="search"
+          placeholder="搜索 Emby 用户ID/用户名"
+          @update:model-value="$emit('update:search', $event)"
+          @keyup.enter="$emit('fetch-users')"
+        />
+        <el-button @click="$emit('fetch-users')" :loading="loadingUsers">查询</el-button>
+      </div>
+      <div class="toolbar-meta">
+        <div class="toolbar-actions">
+          <el-button type="primary" @click="$emit('open-create-dialog')">新增 Emby 用户</el-button>
+          <el-button type="primary" plain @click="$emit('sync-users')" :loading="loadingSyncUsers">
+            同步 Emby 用户到本地
+          </el-button>
+        </div>
+        <span class="toolbar-note">{{ syncResult }}</span>
+      </div>
     </div>
 
     <el-table :data="users" stripe class="top-gap">
@@ -138,3 +144,41 @@ defineEmits<{
   (event: "user-action", command: string, row: UserListItem): void;
 }>();
 </script>
+
+<style scoped>
+.toolbar {
+  display: grid;
+  gap: 10px;
+}
+
+.toolbar-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.toolbar-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.toolbar-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.toolbar-note {
+  color: #606266;
+  font-size: 13px;
+}
+
+@media (max-width: 760px) {
+  .toolbar-main {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

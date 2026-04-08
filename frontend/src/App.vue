@@ -122,7 +122,7 @@
           />
         </el-tab-pane>
 
-        <el-tab-pane label="Webhook通知列表" name="webhook-notify">
+        <el-tab-pane label="邮件发送列表" name="webhook-notify">
           <WebhookNotifyTab
             :webhook-receive-url="webhookReceiveUrl"
             :query="webhookNotifyQuery"
@@ -133,6 +133,7 @@
             :loading="loadingWebhookNotifyList"
             :format-to-china-time="formatToChinaTime"
             :format-webhook-send-status="formatWebhookSendStatus"
+            :format-email-event-type="formatEmailEventType"
             @copy-url="copyWebhookReceiveUrl"
             @update:query="webhookNotifyQuery = $event"
             @search="searchWebhookNotifyRecords"
@@ -362,6 +363,7 @@ import WebhookNotifyTab from "./components/tabs/WebhookNotifyTab.vue";
 import JobsTab from "./components/tabs/JobsTab.vue";
 import {
   formatActivityState,
+  formatEmailEventType,
   formatEmbyMediaType,
   formatEmbyRating,
   formatEmbyRuntimeTicks,
@@ -438,7 +440,7 @@ const policyForm = reactive<Required<Pick<
 
 const rechargeForm = reactive({
   embyUserId: "",
-  amount: 30,
+  amount: 20,
   months: 1,
   note: "",
 });
@@ -685,7 +687,7 @@ function openPasswordDialog(row: UserListItem) {
 function openRechargeDialog(row: UserListItem) {
   rechargeEditingUser.value = row;
   rechargeForm.embyUserId = row.embyUserId;
-  rechargeForm.amount = 30;
+  rechargeForm.amount = 20;
   rechargeForm.months = 1;
   rechargeForm.note = "";
   rechargeDialogVisible.value = true;

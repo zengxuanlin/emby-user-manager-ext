@@ -71,6 +71,29 @@ export function formatWebhookSendStatus(status: string): string {
   return status || "未知";
 }
 
+export function formatEmailEventType(eventType: string): string {
+  const normalized = (eventType || "").trim();
+  const mapping: Record<string, string> = {
+    MEMBERSHIP_RECHARGED: "会员续期通知",
+    MEMBERSHIP_EXPIRED: "会员到期通知",
+    WEBHOOK_WEBHOOKTEST: "Webhook 测试通知",
+    WEBHOOK_NOTIFICATIONTEST: "通知测试事件",
+  };
+
+  if (mapping[normalized]) {
+    return mapping[normalized];
+  }
+
+  if (normalized.startsWith("WEBHOOK_LIBRARY_")) {
+    return "媒体入库通知";
+  }
+  if (normalized.startsWith("WEBHOOK_")) {
+    return `Emby 事件通知 (${normalized.replace(/^WEBHOOK_/, "")})`;
+  }
+
+  return normalized || "未知事件";
+}
+
 export function formatTmdbRating(rating: number | null, voteCount: number | null): string {
   if (rating == null) {
     return "-";

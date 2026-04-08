@@ -1,8 +1,12 @@
 <template>
   <div>
-    <div class="row">
-      <el-button type="primary" @click="$emit('refresh')" :loading="loading">刷新统计</el-button>
-      <span>最近刷新：{{ formatToChinaTime(fetchedAt) }}</span>
+    <div class="toolbar">
+      <div class="toolbar-main">
+        <el-button type="primary" @click="$emit('refresh')" :loading="loading">刷新统计</el-button>
+      </div>
+      <div class="toolbar-meta">
+        <span class="toolbar-note">最近刷新：{{ formatToChinaTime(fetchedAt) }}</span>
+      </div>
     </div>
 
     <div class="top-gap emby-stats-sections">
@@ -135,6 +139,29 @@ defineEmits<{
 </script>
 
 <style scoped>
+.toolbar {
+  display: grid;
+  gap: 10px;
+}
+
+.toolbar-main {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.toolbar-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.toolbar-note {
+  color: #606266;
+  font-size: 13px;
+}
+
 .emby-stats-sections {
   display: grid;
   gap: 18px;

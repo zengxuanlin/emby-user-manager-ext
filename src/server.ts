@@ -739,7 +739,7 @@ app.post("/admin/recharges/manual", requireAdmin, async (req, res) => {
       userId: user.id,
       to: user.email,
       subject: "Emby 会员已续期",
-      body: `你的会员已续期，新的到期时间为 ${newEndAt.toISOString()}。`,
+      body: `你的会员已续期，新的到期时间为 ${formatToShanghaiTime(newEndAt)}。`,
       eventType: "MEMBERSHIP_RECHARGED",
     });
   }
@@ -860,6 +860,8 @@ app.get("/admin/webhook/email-notifications", requireAdmin, async (req, res) => 
         OR: [
           { recipient: { contains: q, mode: "insensitive" as const } },
           { eventType: { contains: q, mode: "insensitive" as const } },
+          { subject: { contains: q, mode: "insensitive" as const } },
+          { body: { contains: q, mode: "insensitive" as const } },
           { status: { contains: q, mode: "insensitive" as const } },
           { failReason: { contains: q, mode: "insensitive" as const } },
           { user: { embyUserId: { contains: q, mode: "insensitive" as const } } },

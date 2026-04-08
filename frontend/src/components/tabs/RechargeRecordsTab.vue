@@ -1,13 +1,15 @@
 <template>
   <div>
-    <div class="row">
-      <el-input
-        :model-value="query"
-        placeholder="搜索 Emby 用户ID/用户名/管理员"
-        @update:model-value="$emit('update:query', $event)"
-        @keyup.enter="$emit('search')"
-      />
-      <el-button @click="$emit('search')" :loading="loading">查询记录</el-button>
+    <div class="toolbar">
+      <div class="toolbar-main">
+        <el-input
+          :model-value="query"
+          placeholder="搜索 Emby 用户ID/用户名/管理员"
+          @update:model-value="$emit('update:query', $event)"
+          @keyup.enter="$emit('search')"
+        />
+        <el-button @click="$emit('search')" :loading="loading">查询记录</el-button>
+      </div>
     </div>
     <el-table :data="records" stripe class="top-gap">
       <el-table-column prop="createdAt" label="充值时间" min-width="180">
@@ -66,3 +68,22 @@ defineEmits<{
   (event: "search"): void;
 }>();
 </script>
+
+<style scoped>
+.toolbar {
+  display: grid;
+  gap: 10px;
+}
+
+.toolbar-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+@media (max-width: 760px) {
+  .toolbar-main {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

@@ -1,14 +1,18 @@
 <template>
   <div>
-    <div class="row">
-      <el-input
-        :model-value="query"
-        placeholder="输入电影或剧集关键字"
-        @update:model-value="$emit('update:query', $event)"
-        @keyup.enter="$emit('search')"
-      />
-      <el-button type="primary" @click="$emit('search')" :loading="loading">搜索</el-button>
-      <span>{{ summary }}</span>
+    <div class="toolbar">
+      <div class="toolbar-main">
+        <el-input
+          :model-value="query"
+          placeholder="输入电影或剧集关键字"
+          @update:model-value="$emit('update:query', $event)"
+          @keyup.enter="$emit('search')"
+        />
+        <el-button type="primary" @click="$emit('search')" :loading="loading">搜索</el-button>
+      </div>
+      <div class="toolbar-meta">
+        <span class="toolbar-note">{{ summary }}</span>
+      </div>
     </div>
 
     <div class="top-gap">
@@ -127,6 +131,30 @@ defineEmits<{
 </script>
 
 <style scoped>
+.toolbar {
+  display: grid;
+  gap: 10px;
+}
+
+.toolbar-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.toolbar-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.toolbar-note {
+  color: #606266;
+  font-size: 13px;
+}
+
 .tmdb-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -204,6 +232,10 @@ defineEmits<{
 }
 
 @media (max-width: 760px) {
+  .toolbar-main {
+    grid-template-columns: 1fr;
+  }
+
   .tmdb-grid {
     grid-template-columns: 1fr;
   }
