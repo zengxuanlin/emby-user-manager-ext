@@ -108,6 +108,7 @@
             @update:query="tmdbQuery = $event"
             @search="searchTmdb"
             @copy-id="copyTmdbId"
+            @copy-resource-name="copyTmdbResourceName"
           />
         </el-tab-pane>
 
@@ -544,6 +545,7 @@ const {
   loadingTmdb,
   searchTmdb,
   copyTmdbId,
+  copyTmdbResourceName,
 } = useTmdbTab(client);
 
 const {

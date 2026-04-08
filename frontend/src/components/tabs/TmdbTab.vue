@@ -38,6 +38,7 @@
 
             <div class="tmdb-actions">
               <el-button size="small" @click="$emit('copy-id', item.id)">复制 TMDB ID</el-button>
+              <el-button size="small" @click="$emit('copy-resource-name', item)">复制资源名称</el-button>
               <el-button
                 size="small"
                 type="primary"
@@ -121,6 +122,7 @@ defineEmits<{
   (event: "update:query", value: string): void;
   (event: "search"): void;
   (event: "copy-id", id: number): void;
+  (event: "copy-resource-name", item: TmdbSearchItem): void;
 }>();
 </script>
 

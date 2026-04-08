@@ -41,6 +41,23 @@ export function useTmdbTab(getClient: () => AdminClient) {
     }
   }
 
+  function buildTmdbResourceName(item: TmdbSearchItem): string {
+    const title = item.title.trim();
+    const year = item.releaseDate ? new Date(item.releaseDate).getFullYear() : NaN;
+    const yearText = Number.isFinite(year) ? `(${year})` : "";
+    return `${title}${yearText}{tmdbid-${item.id}}`;
+  }
+
+  async function copyTmdbResourceName(item: TmdbSearchItem) {
+    try {
+      const resourceName = buildTmdbResourceName(item);
+      await navigator.clipboard.writeText(resourceName);
+      ElMessage.success("资源名称已复制");
+    } catch {
+      ElMessage.error("复制资源名称失败");
+    }
+  }
+
   return {
     tmdbQuery,
     tmdbSummary,
@@ -49,5 +66,6 @@ export function useTmdbTab(getClient: () => AdminClient) {
     loadingTmdb,
     searchTmdb,
     copyTmdbId,
+    copyTmdbResourceName,
   };
 }
