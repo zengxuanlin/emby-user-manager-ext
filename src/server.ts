@@ -26,6 +26,11 @@ import {
   testEmbyConnection,
   updateEmbyUserPassword,
 } from "./emby.js";
+import {
+  getAssrtQuota,
+  getAssrtSubtitleDetail,
+  searchAssrtSubtitles,
+} from "./assrt.js";
 import { isTmdbConfigured, searchTmdbByKeyword } from "./tmdb.js";
 
 const app = express();
@@ -250,6 +255,70 @@ app.get("/admin/tmdb/search", requireAdmin, async (req, res, next) => {
 
     const result = await searchTmdbByKeyword(q, page);
     res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+const assrtSearchSchema = z.object({
+  token: z.string().trim().min(1, "ASSRT Token is required"),
+  q: z.string().trim().min(3, "search keyword must be at least 3 characters"),
+  cnt: z.number().int().min(1).max(15).optional(),
+  pos: z.number().int().min(0).optional(),
+});
+
+app.post("/admin/assrt/search", requireAdmin, async (req, res, next) => {
+  const parsed = assrtSearchSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      message: parsed.error.issues[0]?.message || "invalid ASSRT search payload",
+    });
+  }
+
+  try {
+    const [searchResult, quotaResult] = await Promise.allSettled([
+      searchAssrtSubtitles(
+        parsed.data.token,
+        parsed.data.q,
+        parsed.data.cnt ?? 10,
+        parsed.data.pos ?? 0,
+      ),
+      getAssrtQuota(parsed.data.token),
+    ]);
+
+    if (searchResult.status === "rejected") {
+      throw searchResult.reason;
+    }
+
+    res.json({
+      results: searchResult.value,
+      quota: quotaResult.status === "fulfilled" ? quotaResult.value : null,
+      fetchedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+const assrtDetailSchema = z.object({
+  token: z.string().trim().min(1, "ASSRT Token is required"),
+  id: z.number().int().positive(),
+});
+
+app.post("/admin/assrt/detail", requireAdmin, async (req, res, next) => {
+  const parsed = assrtDetailSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      message: parsed.error.issues[0]?.message || "invalid ASSRT detail payload",
+    });
+  }
+
+  try {
+    const detail = await getAssrtSubtitleDetail(parsed.data.token, parsed.data.id);
+    if (!detail) {
+      return res.status(404).json({ message: "subtitle detail not found" });
+    }
+    res.json({ detail });
   } catch (error) {
     next(error);
   }

@@ -111,6 +111,48 @@ export function formatRuntime(runtime: number | null): string {
   return `${runtime} 分钟`;
 }
 
+export function formatFileSize(size: number | null | undefined): string {
+  if (size == null || !Number.isFinite(size)) {
+    return "-";
+  }
+
+  if (size < 1024) {
+    return `${size} B`;
+  }
+  if (size < 1024 * 1024) {
+    return `${(size / 1024).toFixed(1)} KB`;
+  }
+  if (size < 1024 * 1024 * 1024) {
+    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  }
+  return `${(size / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
+
+export function formatAssrtProducer(
+  producer:
+    | {
+        uploader: string | null;
+        verifier: string | null;
+        producer: string | null;
+        source: string | null;
+      }
+    | null
+    | undefined,
+): string {
+  if (!producer) {
+    return "-";
+  }
+
+  const parts = [
+    producer.uploader ? `上传者：${producer.uploader}` : "",
+    producer.verifier ? `校订：${producer.verifier}` : "",
+    producer.producer ? `制作者：${producer.producer}` : "",
+    producer.source ? `来源：${producer.source}` : "",
+  ].filter(Boolean);
+
+  return parts.length ? parts.join(" / ") : "-";
+}
+
 export function formatSeasonEpisode(seasonCount: number | null, episodeCount: number | null): string {
   const seasonText = seasonCount != null ? `${seasonCount}季` : "-";
   const episodeText = episodeCount != null ? `${episodeCount}集` : "-";

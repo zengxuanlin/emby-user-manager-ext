@@ -146,6 +146,39 @@ export interface TmdbSearchItem {
   imdbId: string | null;
 }
 
+export interface AssrtSubtitleSearchItem {
+  id: number;
+  nativeName: string;
+  videoName: string | null;
+  revision: number;
+  subtype: string | null;
+  uploadTime: string | null;
+  voteScore: number | null;
+  releaseSite: string | null;
+  languageDesc: string | null;
+  isMachineTranslated: boolean;
+}
+
+export interface AssrtSubtitleDetail extends AssrtSubtitleSearchItem {
+  filename: string | null;
+  size: number | null;
+  downloadUrl: string | null;
+  viewCount: number | null;
+  downCount: number | null;
+  title: string | null;
+  files: Array<{
+    name: string | null;
+    size: number | null;
+    downloadUrl: string | null;
+  }>;
+  producer: {
+    uploader: string | null;
+    verifier: string | null;
+    producer: string | null;
+    source: string | null;
+  } | null;
+}
+
 export function login(baseUrl: string, payload: { username: string; password: string }) {
   const http = axios.create({
     baseURL: baseUrl,
@@ -298,6 +331,16 @@ export function createAdminClient(settings: AdminSettings) {
       }>("/admin/tmdb/search", {
         params: { q, page },
       });
+    },
+    searchAssrt(payload: { token: string; q: string; cnt?: number; pos?: number }) {
+      return http.post<{
+        results: AssrtSubtitleSearchItem[];
+        quota: number | null;
+        fetchedAt: string;
+      }>("/admin/assrt/search", payload);
+    },
+    getAssrtSubtitleDetail(payload: { token: string; id: number }) {
+      return http.post<{ detail: AssrtSubtitleDetail }>("/admin/assrt/detail", payload);
     },
   };
 }

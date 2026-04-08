@@ -112,6 +112,31 @@
           />
         </el-tab-pane>
 
+        <el-tab-pane label="字幕搜索" name="assrt">
+          <AssrtTab
+            :token="assrtToken"
+            :query="assrtQuery"
+            :summary="assrtSummary"
+            :quota="assrtQuota"
+            :fetched-at="assrtFetchedAt"
+            :has-searched="assrtHasSearched"
+            :results="assrtResults"
+            :details="assrtDetails"
+            :expanded-ids="assrtExpandedIds"
+            :detail-loading="assrtDetailLoading"
+            :loading="loadingAssrt"
+            :format-to-china-time="formatToChinaTime"
+            :format-file-size="formatFileSize"
+            :format-producer="formatAssrtProducer"
+            @update:token="assrtToken = $event"
+            @update:query="assrtQuery = $event"
+            @search="searchAssrt"
+            @toggle-detail="toggleAssrtDetail"
+            @copy-id="copyAssrtSubtitleId"
+            @copy-download-url="copyAssrtDownloadUrl"
+          />
+        </el-tab-pane>
+
         <el-tab-pane label="通知设置" name="notification">
           <NotificationTab
             :form="notificationForm"
@@ -358,15 +383,18 @@ import RechargeRecordsTab from "./components/tabs/RechargeRecordsTab.vue";
 import MembershipTab from "./components/tabs/MembershipTab.vue";
 import EmbyStatsTab from "./components/tabs/EmbyStatsTab.vue";
 import TmdbTab from "./components/tabs/TmdbTab.vue";
+import AssrtTab from "./components/tabs/AssrtTab.vue";
 import NotificationTab from "./components/tabs/NotificationTab.vue";
 import WebhookNotifyTab from "./components/tabs/WebhookNotifyTab.vue";
 import JobsTab from "./components/tabs/JobsTab.vue";
 import {
   formatActivityState,
+  formatAssrtProducer,
   formatEmailEventType,
   formatEmbyMediaType,
   formatEmbyRating,
   formatEmbyRuntimeTicks,
+  formatFileSize,
   formatMembershipStatus,
   formatPlaybackProgress,
   formatRuntime,
@@ -381,6 +409,7 @@ import {
 import { useActivityTab } from "./composables/useActivityTab";
 import { useEmbyStatsTab } from "./composables/useEmbyStatsTab";
 import { useTmdbTab } from "./composables/useTmdbTab";
+import { useAssrtTab } from "./composables/useAssrtTab";
 import { useWebhookNotifyTab } from "./composables/useWebhookNotifyTab";
 import { useJobsTab } from "./composables/useJobsTab";
 import { useUsersTab } from "./composables/useUsersTab";
@@ -549,6 +578,24 @@ const {
   copyTmdbId,
   copyTmdbResourceName,
 } = useTmdbTab(client);
+
+const {
+  assrtToken,
+  assrtQuery,
+  assrtSummary,
+  assrtQuota,
+  assrtHasSearched,
+  assrtResults,
+  assrtFetchedAt,
+  loadingAssrt,
+  assrtDetails,
+  assrtExpandedIds,
+  assrtDetailLoading,
+  searchAssrt,
+  toggleAssrtDetail,
+  copyAssrtSubtitleId,
+  copyAssrtDownloadUrl,
+} = useAssrtTab(client);
 
 const {
   webhookNotifyRecords,
